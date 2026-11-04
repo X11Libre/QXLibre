@@ -783,18 +783,12 @@ std::optional<QByteArray> QXcbClipboard::clipboardReadIncrementalProperty(xcb_wi
 {
     QByteArray buf;
     QByteArray tmp_buf;
-    bool alloc_error = false;
     int  length;
-    int  offset = 0;
     xcb_timestamp_t prev_time = m_incr_receive_time;
 
-    if (nbytes > 0) {
-        // Reserve buffer + zero-terminator (for text data)
-        // We want to complete the INCR transfer even if we cannot
-        // allocate more memory
-        buf.resize(nbytes+1);
-        alloc_error = buf.size() != nbytes+1;
-    }
+    // nbytes is only a hint from the selection owner
+    if (nbytes > 0)
+        buf.reserve(qMin(nbytes, 1024 * 1024) + 1);
 
     QElapsedTimer timer;
     timer.start();
@@ -814,25 +808,15 @@ std::optional<QByteArray> QXcbClipboard::clipboardReadIncrementalProperty(xcb_wi
 
         if (clipboardReadProperty(win, property, true, &tmp_buf, &length, nullptr, nullptr)) {
             if (length == 0) {                // no more data, we're done
-                if (nullterm) {
-                    buf.resize(offset+1);
-                    buf[offset] = '\0';
-                } else {
-                    buf.resize(offset);
-                }
+                if (nullterm)
+                    buf.append('\0');
                 return buf;
-            } else if (!alloc_error) {
-                if (offset+length > (int)buf.size()) {
-                    buf.resize(offset+length+65535);
-                    if (buf.size() != offset+length+65535) {
-                        alloc_error = true;
-                        length = buf.size() - offset;
-                    }
-                }
-                memcpy(buf.data()+offset, tmp_buf.constData(), length);
-                tmp_buf.resize(0);
-                offset += length;
             }
+            // too large for a QByteArray
+            if (length > buf.max_size() - buf.size())
+                break;
+            buf.append(tmp_buf.constData(), length);
+            tmp_buf.resize(0);
         }
 
         const auto elapsed = timer.elapsed();
@@ -840,8 +824,8 @@ std::optional<QByteArray> QXcbClipboard::clipboardReadIncrementalProperty(xcb_wi
             break;
     }
 
-    // timed out ... create a new requestor window, otherwise the requestor
-    // could consider next request to be still part of this timed out request
+    // timed out or too large ... create a new requestor window, otherwise the
+    // requestor could consider next request to be still part of this request
     setRequestor(0);
 
     return std::nullopt;
