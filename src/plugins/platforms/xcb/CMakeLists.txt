@@ -140,6 +140,21 @@ qt_internal_add_plugin(QXLibreIntegrationPlugin
 # Not OUTPUT_NAME above: that creates a "qxlibre" target, which is the repo's own target name.
 set_property(TARGET QXLibreIntegrationPlugin PROPERTY OUTPUT_NAME qxlibre)
 
+if(QXLIBRE_WITHOUT_QT_XCB)
+    qt_internal_extend_target(XLibreQpaPrivate
+        SOURCES
+            ../../../compat/qxlibrenativeinterfaces.cpp
+    )
+    qt_internal_extend_target(XLibreQpaPrivate CONDITION NOT QT_FEATURE_eglfs
+        SOURCES
+            ../../../compat/qedidparser.cpp
+    )
+    qt_internal_extend_target(QXLibreIntegrationPlugin
+        DEFINES
+            QXLIBRE_CLAIM_XCB_KEY
+    )
+endif()
+
 add_subdirectory(gl_integrations)
 if(OFF)
     add_subdirectory(xcb-static)

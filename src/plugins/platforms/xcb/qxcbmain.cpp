@@ -12,14 +12,19 @@ using namespace Qt::StringLiterals;
 class QXcbIntegrationPlugin : public QPlatformIntegrationPlugin
 {
    Q_OBJECT
+#ifdef QXLIBRE_CLAIM_XCB_KEY
+   Q_PLUGIN_METADATA(IID QPlatformIntegrationFactoryInterface_iid FILE "xcb-claim.json")
+#else
    Q_PLUGIN_METADATA(IID QPlatformIntegrationFactoryInterface_iid FILE "xcb.json")
+#endif
 public:
     QPlatformIntegration *create(const QString&, const QStringList&, int &, char **) override;
 };
 
 QPlatformIntegration* QXcbIntegrationPlugin::create(const QString& system, const QStringList& parameters, int &argc, char **argv)
 {
-    if (!system.compare("xlibre"_L1, Qt::CaseInsensitive)) {
+    if (!system.compare("xlibre"_L1, Qt::CaseInsensitive)
+        || !system.compare("xcb"_L1, Qt::CaseInsensitive)) {
         auto xcbIntegration = new QXcbIntegration(parameters, argc, argv);
         if (!xcbIntegration->hasConnection()) {
             delete xcbIntegration;

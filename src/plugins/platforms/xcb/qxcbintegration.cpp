@@ -40,9 +40,6 @@
 
 #include <qpa/qplatforminputcontextfactory_p.h>
 #include <private/qgenericunixtheme_p.h>
-#if QT_CONFIG(dbus)
-#include <private/qkdetheme_p.h>
-#endif
 #include <qpa/qplatforminputcontext.h>
 
 #include <QtGui/QOpenGLContext>

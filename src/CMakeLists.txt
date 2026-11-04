@@ -9,4 +9,28 @@ qt_find_package(XKB_COMMON_X11 0.9.0 MODULE PROVIDED_TARGETS PkgConfig::XKB_COMM
 if(QT_FEATURE_glib)
     qt_find_package(GLIB2 MODULE PROVIDED_TARGETS GLIB2::GLIB2)
 endif()
+
+# Qt without xcb: switch its X11 features on for this project. Keep the list in sync with
+# compat/qxlibre-qt-config.h.
+set(QXLIBRE_WITHOUT_QT_XCB OFF)
+if(NOT QT_FEATURE_xcb)
+    set(QXLIBRE_WITHOUT_QT_XCB ON)
+    foreach(f xcb xlib xcb_xlib xkbcommon_x11 system_xcb_xinput)
+        set(QT_FEATURE_${f} ON)
+    endforeach()
+    if(QT_FEATURE_sessionmanager)
+        set(QT_FEATURE_xcb_sm ON)
+    endif()
+    if(QT_FEATURE_opengl AND NOT QT_FEATURE_opengles2)
+        set(QT_FEATURE_xcb_glx ON)
+        set(QT_FEATURE_xcb_glx_plugin ON)
+    endif()
+    if(QT_FEATURE_egl AND QT_FEATURE_opengl)
+        set(QT_FEATURE_xcb_egl_plugin ON)
+        set(QT_FEATURE_egl_x11 ON)
+    endif()
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/compat/qxlibre-qt-config.h>")
+    include_directories(compat/include compat/include/QtGui/private)
+endif()
+
 add_subdirectory(plugins/platforms/xcb)

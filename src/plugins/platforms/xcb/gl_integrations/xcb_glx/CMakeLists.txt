@@ -40,3 +40,10 @@ qt_internal_extend_target(QXLibreGlxIntegrationPlugin
     LIBRARIES
         ${CMAKE_DL_LIBS}
 )
+
+qt_internal_extend_target(QXLibreGlxIntegrationPlugin CONDITION QXLIBRE_WITHOUT_QT_XCB
+    SOURCES
+        ../../../../../compat/qglxconvenience.cpp
+    LIBRARIES
+        X11::X11
+)

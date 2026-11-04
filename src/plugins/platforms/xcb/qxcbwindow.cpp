@@ -1646,6 +1646,13 @@ void QXcbWindow::setWmWindowType(WindowTypes types, Qt::WindowFlags flags)
         if (!(types & WindowType::Splash))
             atoms.append(atom(QXcbAtom::Atom_NET_WM_WINDOW_TYPE_SPLASH));
         break;
+#ifdef QXLIBRE_QT_WITHOUT_XCB
+    case Qt::Popup:
+        // Qt without xcb can't send the window types it would otherwise set on popups.
+        if (!types)
+            atoms.append(atom(QXcbAtom::Atom_NET_WM_WINDOW_TYPE_POPUP_MENU));
+        break;
+#endif
     default:
         break;
     }
