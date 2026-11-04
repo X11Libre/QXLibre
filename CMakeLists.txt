@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22)
+include(.cmake.conf)
+project(QXLibre VERSION "${QT_REPO_MODULE_VERSION}" LANGUAGES CXX C)
+find_package(Qt6 ${PROJECT_VERSION} CONFIG REQUIRED COMPONENTS BuildInternals)
+qt_internal_project_setup()
+find_package(Qt6 ${PROJECT_VERSION} CONFIG REQUIRED COMPONENTS Core Gui)
+qt_build_repo()

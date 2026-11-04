@@ -2,14 +2,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 #####################################################################
-## QXcbEglIntegrationPlugin Plugin:
+## QXLibreEglIntegrationPlugin Plugin:
 #####################################################################
 
 qt_find_package(EGL MODULE)
 
-qt_internal_add_plugin(QXcbEglIntegrationPlugin
-    OUTPUT_NAME qxcb-egl-integration
-    PLUGIN_TYPE xcbglintegrations
+qt_internal_add_plugin(QXLibreEglIntegrationPlugin
+    OUTPUT_NAME qxlibre-egl-integration
+    PLUGIN_TYPE xlibreglintegrations
+    DEFAULT_IF FALSE
     SOURCES
         qxcbeglcontext.h
         qxcbeglintegration.cpp qxcbeglintegration.h
@@ -24,7 +25,7 @@ qt_internal_add_plugin(QXcbEglIntegrationPlugin
         Qt::CorePrivate
         Qt::Gui
         Qt::GuiPrivate
-        Qt::XcbQpaPrivate
+        Qt::XLibreQpaPrivate
         EGL::EGL
     NO_UNITY_BUILD # X11 define clashes
 )

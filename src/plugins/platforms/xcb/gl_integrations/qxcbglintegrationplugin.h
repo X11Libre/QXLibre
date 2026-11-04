@@ -10,7 +10,7 @@
 
 QT_BEGIN_NAMESPACE
 
-#define QXcbGlIntegrationFactoryInterface_iid "org.qt-project.Qt.QPA.Xcb.QXcbGlIntegrationFactoryInterface.5.5"
+#define QXcbGlIntegrationFactoryInterface_iid "org.qt-project.Qt.QPA.XLibre.QXLibreGlIntegrationFactoryInterface.1"
 
 class QXcbGlIntegration;
 

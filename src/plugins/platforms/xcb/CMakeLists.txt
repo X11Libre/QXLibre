@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 #####################################################################
-## XcbQpaPrivate Module:
+## XLibreQpaPrivate Module:
 #####################################################################
 
 if(GCC)
@@ -10,10 +10,12 @@ if(GCC)
     add_compile_options(-Wno-psabi)
 endif()
 
-qt_internal_add_module(XcbQpaPrivate
-    CONFIG_MODULE_NAME xcb_qpa_lib
+qt_internal_add_module(XLibreQpaPrivate
+    CONFIG_MODULE_NAME xlibre_qpa_lib
     INTERNAL_MODULE
     NO_MODULE_HEADERS
+    PLUGIN_TYPES
+        xlibreglintegrations
     SOURCES
         gl_integrations/qxcbglintegration.cpp gl_integrations/qxcbglintegration.h
         gl_integrations/qxcbglintegrationfactory.cpp gl_integrations/qxcbglintegrationfactory.h
@@ -67,22 +69,22 @@ qt_internal_add_module(XcbQpaPrivate
     NO_UNITY_BUILD # X11 define clashes
 )
 
-qt_disable_apple_app_extension_api_only(XcbQpaPrivate)
+qt_disable_apple_app_extension_api_only(XLibreQpaPrivate)
 
 ## Scopes:
 #####################################################################
 
-qt_internal_extend_target(XcbQpaPrivate CONDITION QT_FEATURE_glib
+qt_internal_extend_target(XLibreQpaPrivate CONDITION QT_FEATURE_glib
     LIBRARIES
         GLIB2::GLIB2
 )
 
-qt_internal_extend_target(XcbQpaPrivate CONDITION QT_FEATURE_draganddrop
+qt_internal_extend_target(XLibreQpaPrivate CONDITION QT_FEATURE_draganddrop
     SOURCES
         qxcbdrag.cpp qxcbdrag.h
 )
 
-qt_internal_extend_target(XcbQpaPrivate CONDITION QT_FEATURE_xcb_xlib
+qt_internal_extend_target(XLibreQpaPrivate CONDITION QT_FEATURE_xcb_xlib
     SOURCES
         qt_xlib_wrapper.c qt_xlib_wrapper.h
     PUBLIC_LIBRARIES
@@ -90,12 +92,12 @@ qt_internal_extend_target(XcbQpaPrivate CONDITION QT_FEATURE_xcb_xlib
         X11::X11
 )
 
-qt_internal_extend_target(XcbQpaPrivate CONDITION NOT QT_FEATURE_xcb_xlib
+qt_internal_extend_target(XLibreQpaPrivate CONDITION NOT QT_FEATURE_xcb_xlib
     SOURCES
         qxcbcursorfont.h
 )
 
-qt_internal_extend_target(XcbQpaPrivate CONDITION QT_FEATURE_xcb_sm
+qt_internal_extend_target(XLibreQpaPrivate CONDITION QT_FEATURE_xcb_sm
     SOURCES
         qxcbsessionmanager.cpp qxcbsessionmanager.h
     PUBLIC_LIBRARIES
@@ -103,55 +105,40 @@ qt_internal_extend_target(XcbQpaPrivate CONDITION QT_FEATURE_xcb_sm
         X11::ICE
 )
 
-qt_internal_extend_target(XcbQpaPrivate CONDITION QT_FEATURE_vulkan
+qt_internal_extend_target(XLibreQpaPrivate CONDITION QT_FEATURE_vulkan
     SOURCES
         qxcbvulkaninstance.cpp qxcbvulkaninstance.h
         qxcbvulkanwindow.cpp qxcbvulkanwindow.h
 )
 
-qt_internal_extend_target(XcbQpaPrivate CONDITION QT_FEATURE_dlopen
+qt_internal_extend_target(XLibreQpaPrivate CONDITION QT_FEATURE_dlopen
     PUBLIC_LIBRARIES
         ${CMAKE_DL_LIBS}
 )
 
-qt_internal_extend_target(XcbQpaPrivate CONDITION CLANG
+qt_internal_extend_target(XLibreQpaPrivate CONDITION CLANG
     COMPILE_OPTIONS
         -ftemplate-depth=1024
 )
 
-if(QT_FEATURE_system_xcb_xinput)
-    qt_internal_extend_target(XcbQpaPrivate LIBRARIES XCB::XINPUT)
-else()
-    qt_internal_extend_target(XcbQpaPrivate
-        ATTRIBUTION_FILE_DIR_PATHS
-            ../../../3rdparty/xcb
-    )
-    set(xinput_source "${PROJECT_SOURCE_DIR}/src/3rdparty/xcb/libxcb/xinput.c")
-    set_source_files_properties(
-        "${xinput_source}"
-        PROPERTIES COMPILE_OPTIONS "-w"
-    )
-    target_sources(XcbQpaPrivate PRIVATE "${xinput_source}")
-    target_include_directories(XcbQpaPrivate PRIVATE
-        "${PROJECT_SOURCE_DIR}/src/3rdparty/xcb/include"
-    )
-endif()
+qt_internal_extend_target(XLibreQpaPrivate LIBRARIES XCB::XINPUT)
 
 #####################################################################
-## QXcbIntegrationPlugin Plugin:
+## QXLibreIntegrationPlugin Plugin:
 #####################################################################
 
-qt_internal_add_plugin(QXcbIntegrationPlugin
-    OUTPUT_NAME qxcb
+qt_internal_add_plugin(QXLibreIntegrationPlugin
     PLUGIN_TYPE platforms
-    DEFAULT_IF "xcb" IN_LIST QT_QPA_PLATFORMS
+    DEFAULT_IF FALSE
     SOURCES
         qxcbmain.cpp
     LIBRARIES
         Qt::CorePrivate
         Qt::GuiPrivate
-        Qt::XcbQpaPrivate
+        Qt::XLibreQpaPrivate
 )
+# Not OUTPUT_NAME above: that creates a "qxlibre" target, which is the repo's own target name.
+set_property(TARGET QXLibreIntegrationPlugin PROPERTY OUTPUT_NAME qxlibre)
 
 add_subdirectory(gl_integrations)
 if(OFF)
