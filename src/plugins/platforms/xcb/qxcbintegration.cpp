@@ -421,6 +421,11 @@ QPlatformKeyMapper *QXcbIntegration::keyMapper() const
 
 QStringList QXcbIntegration::themeNames() const
 {
+    // Loaded as "xlibre"; report "xcb" so platformName() checks keep working.
+    if (QGuiApplicationPrivate::platform_name)
+        *QGuiApplicationPrivate::platform_name = "xcb"_L1;
+    else
+        qWarning("QXLibre: platform name not set before themeNames()");
     return QGenericUnixTheme::themeNames();
 }
 
