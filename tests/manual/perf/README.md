@@ -69,6 +69,40 @@ timer. `QT_XLIBRE_NO_VBLANK_UPDATES=1` turns it off.
 - Not measured on this GPU: Qt Quick and OpenGL windows, which were only tested for correct behaviour on `llvmpipe`, and
   Vulkan. Displays other than 60 Hz weren't tried. A display that's blanked slows these windows to the server's 1 Hz.
 
+### Kept: fewer round trips
+
+Each upload's last `xcb_shm_put_image()` asks for a completion event. Painting over memory the server was reading calls
+`sync()` only if the latest upload's event hasn't arrived. `QT_XLIBRE_NO_SHM_COMPLETION=1` turns it off.
+
+Each row compares 5 interleaved pairs of runs of 100 frames at `QXLIBRE_PERF_PACE_MS=20`, with vblank updates on and a load
+average of up to 2.8. It shows blocking syncs per frame and median frame time and p99 in ms, off against on. `lower` counts the
+pairs where the frame time was lower with completion events. Percentages are the median difference between pairs.
+
+| Compositor on | Syncs | Median | Change | Lower | p99 | Change | Lower |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `partial` | 1.01 to 0.01 | 0.92 to 0.71 | -22% | 5/5 | 1.34 to 0.97 | -26% | 5/5 |
+| `update` | 1.01 to 0.01 | 1.90 to 1.72 | -10% | 5/5 | 2.94 to 2.20 | -24% | 5/5 |
+| `resize` | 2.00 to 1.00 | 2.63 to 2.13 | -19% | 5/5 | 8.49 to 9.10 | -15% | 3/5 |
+| `fullrepaint1080p` | 1.00 to 0.00 | 5.28 to 5.08 | -3% | 5/5 | 7.19 to 7.31 | +2% | 1/5 |
+| `scrolltext` | 1.04 to 1.00 | 2.31 to 2.13 | -9% | 5/5 | 52.59 to 52.98 | +1% | 2/5 |
+| `scrolllist` | 1.00 to 0.99 | 2.57 to 2.56 | 0% | 3/5 | 11.12 to 11.11 | -12% | 3/5 |
+
+| Compositor off | Syncs | Median | Change | Lower | p99 | Change | Lower |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `partial` | 1.01 to 0.00 | 0.69 to 0.42 | -35% | 5/5 | 1.34 to 0.68 | -57% | 4/5 |
+| `update` | 1.01 to 0.00 | 1.63 to 1.38 | -16% | 5/5 | 2.61 to 2.02 | -23% | 5/5 |
+| `resize` | 2.00 to 0.99 | 2.62 to 2.19 | -15% | 5/5 | 11.57 to 9.48 | -18% | 5/5 |
+| `fullrepaint1080p` | 1.00 to 0.00 | 4.81 to 4.49 | -7% | 4/5 | 6.41 to 6.41 | -5% | 3/5 |
+| `scrolltext` | 1.05 to 1.00 | 2.21 to 2.50 | +13% | 2/5 | 52.12 to 51.84 | -2% | 4/5 |
+| `scrolllist` | 1.00 to 0.99 | 3.67 to 2.58 | -30% | 5/5 | 12.45 to 10.74 | -10% | 3/5 |
+
+- The tool makes its own round trip each frame, so these frame times still include one.
+- Client plus server CPU per frame didn't change clearly: `update` went from 3.31 to 3.29 ms with the compositor on and 2.65 to
+  2.50 ms with it off.
+- `scrolltext` and `scrolllist` keep their sync, so differences there show the noise: `scrolltext` CPU changed by -20% with the
+  compositor on and +25% with it off, and `scrolllist` median frame time by 0% and -30%.
+- A frame painted before the last upload's event has been handled still calls `sync()`, as before.
+
 ## Baseline, 2026-11-05
 
 QXLibre at Qt 6.12.0, in a CachyOS VM with 8 vCPUs and 8 GB, XLibre 25.1.9 and `llvmpipe`. Each row is

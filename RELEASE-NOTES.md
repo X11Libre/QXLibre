@@ -25,5 +25,10 @@ support in Qt, and it keeps working if Qt removes that support. These notes list
   desktop's compositing on. With compositing off, those savings were 54% and 37%, and updates were also 40% steadier.
   Windows built with Qt Widgets aren't affected. If you need to, you can turn this off with
   `QT_XLIBRE_NO_VBLANK_UPDATES=1`.
-- Behind the scenes: new automated tests for containers, popups, animation timing and the reported platform name, and a
-  new tool that measures drawing performance.
+- Windows built with Qt Widgets respond faster, because drawing usually no longer has to stop and wait for the X server.
+  On the same machine, small updates such as a blinking text cursor took 22% less time with compositing on and 35% less
+  with it off, and updates to a whole window took 10% and 16% less, with their slowest frames about 24% quicker. Resizing
+  took 15-19% less time. Processor use stayed about the same, and scrolling didn't change. If you need to, you can turn
+  this off with `QT_XLIBRE_NO_SHM_COMPLETION=1`.
+- Behind the scenes: new automated tests for containers, popups, animation timing, drawing without waiting for the X
+  server and the reported platform name, and a new tool that measures drawing performance.
