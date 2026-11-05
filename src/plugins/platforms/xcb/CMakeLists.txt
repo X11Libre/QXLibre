@@ -43,6 +43,7 @@ qt_internal_add_module(XLibreQpaPrivate
         qxcbwindow.cpp qxcbwindow.h
         qxcbwmsupport.cpp qxcbwmsupport.h
         qxcbxsettings.cpp qxcbxsettings.h
+        xlibre/qxlibreserver.cpp xlibre/qxlibreserver.h
     DEFINES
         QT_BUILD_XCB_PLUGIN
     INCLUDE_DIRECTORIES

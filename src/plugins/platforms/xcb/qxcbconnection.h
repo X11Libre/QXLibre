@@ -19,6 +19,9 @@
 
 #include "qxcbeventqueue.h"
 #include "qxcbconnection_basic.h"
+#include "xlibre/qxlibreserver.h"
+
+#include <memory>
 
 #if QT_CONFIG(tabletevent)
 #include <QTabletEvent>
@@ -206,6 +209,7 @@ public:
     void processXcbEvents(QEventLoop::ProcessEventsFlags flags);
 
     QTimer &focusInTimer() { return m_focusInTimer; }
+    const QXLibreServer *xlibreServer() const { return m_xlibreServer.get(); }
 
 protected:
     bool event(QEvent *e) override;
@@ -324,6 +328,7 @@ private:
     QXcbNativeInterface *m_nativeInterface = nullptr;
 
     QXcbEventQueue *m_eventQueue = nullptr;
+    std::unique_ptr<QXLibreServer> m_xlibreServer;
 
     WindowMapper m_mapper;
 

@@ -64,6 +64,7 @@ QXcbConnection::QXcbConnection(QXcbNativeInterface *nativeInterface, bool canGra
     if (!isConnected())
         return;
 
+    m_xlibreServer = std::make_unique<QXLibreServer>(xcb_connection());
     m_eventQueue = new QXcbEventQueue(this);
 
     if (hasXRandr())
@@ -1118,6 +1119,7 @@ const xcb_format_t *QXcbConnection::formatForDepth(uint8_t depth) const
 
 void QXcbConnection::sync()
 {
+    QXLibreServer::countSync();
     // from xcb_aux_sync
     xcb_get_input_focus_cookie_t cookie = xcb_get_input_focus(xcb_connection());
     free(xcb_get_input_focus_reply(xcb_connection(), cookie, nullptr));
