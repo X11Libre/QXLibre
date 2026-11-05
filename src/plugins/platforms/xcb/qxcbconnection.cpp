@@ -823,6 +823,12 @@ xcb_timestamp_t QXcbConnection::getTimestamp()
 {
     // send a dummy event to myself to get the timestamp from X server.
     xcb_window_t window = rootWindow();
+    if (m_xlibreServer->isRootRestricted()) {
+        // Without events from the root window, the loop below would never end.
+        window = clientLeader();
+        const uint32_t mask = XCB_EVENT_MASK_PROPERTY_CHANGE;
+        xcb_change_window_attributes(xcb_connection(), window, XCB_CW_EVENT_MASK, &mask);
+    }
     xcb_atom_t dummyAtom = atom(QXcbAtom::Atom_QT_GET_TIMESTAMP);
     xcb_change_property(xcb_connection(), XCB_PROP_MODE_REPLACE, window, dummyAtom,
                         XCB_ATOM_INTEGER, 32, 0, nullptr);
@@ -1151,6 +1157,9 @@ QXcbGlIntegration *QXcbConnection::glIntegration() const
 
     QStringList glIntegrationNames;
     glIntegrationNames << QStringLiteral("xcb_glx") << QStringLiteral("xcb_egl");
+    // Inside an Xnamespace GLX reports a working context that can't create drawables.
+    if (m_xlibreServer->isRootRestricted())
+        glIntegrationNames.removeAll(QStringLiteral("xcb_glx"));
     QString glIntegrationName = QString::fromLocal8Bit(qgetenv("QT_XCB_GL_INTEGRATION"));
     if (!glIntegrationName.isEmpty()) {
         qCDebug(lcQpaGl) << "QT_XCB_GL_INTEGRATION is set to" << glIntegrationName;

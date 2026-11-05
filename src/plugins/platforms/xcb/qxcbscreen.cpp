@@ -478,10 +478,12 @@ xcb_colormap_t QXcbVirtualDesktop::colormapForVisual(xcb_visualid_t visualid) co
         return *it;
 
     auto cmap = xcb_generate_id(xcb_connection());
+    // The server refuses the root window here inside an Xnamespace, but any window on it will do.
     xcb_create_colormap(xcb_connection(),
                         XCB_COLORMAP_ALLOC_NONE,
                         cmap,
-                        screen()->root,
+                        connection()->xlibreServer()->isRootRestricted()
+                            ? connection()->clientLeader() : screen()->root,
                         visualid);
     m_visualColormaps.insert(visualid, cmap);
     return cmap;
@@ -601,6 +603,13 @@ void QXcbScreen::setMonitor(xcb_randr_monitor_info_t *monitorInfo, xcb_timestamp
         m_mode = XCB_NONE;
         m_outputName = defaultName();
         // TODO: Send an event to the QScreen instance that the screen changed its name
+        // A new fake screen has no geometry yet, and at 0x0 widgets size themselves to nothing.
+        if (m_geometry.isEmpty())
+            m_geometry = QRect(QPoint(), virtualDesktop()->size());
+        if (m_availableGeometry.isEmpty())
+            m_availableGeometry = m_virtualDesktop->availableGeometry(m_geometry);
+        if (m_sizeMillimeters.isEmpty())
+            m_sizeMillimeters = virtualDesktop()->physicalSize();
         return;
     }
 

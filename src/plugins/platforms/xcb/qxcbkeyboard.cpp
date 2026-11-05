@@ -325,7 +325,7 @@ struct xkb_keymap *QXcbKeyboard::keymapFromCore(const KeysymModifierMap &keysymM
 
 void QXcbKeyboard::updateKeymap(xcb_mapping_notify_event_t *event)
 {
-    if (connection()->hasXKB() || event->request == XCB_MAPPING_POINTER)
+    if (usesXkbDevice() || event->request == XCB_MAPPING_POINTER)
         return;
 
     xcb_refresh_keyboard_mapping(m_key_symbols, event);
@@ -335,7 +335,7 @@ void QXcbKeyboard::updateKeymap(xcb_mapping_notify_event_t *event)
 void QXcbKeyboard::updateKeymap()
 {
     KeysymModifierMap keysymMods;
-    if (!connection()->hasXKB())
+    if (!usesXkbDevice())
         keysymMods = keysymsToModifiers();
     updateModifiers(keysymMods);
 
@@ -353,7 +353,7 @@ void QXcbKeyboard::updateKeymap()
         xkb_context_set_log_level(m_xkbContext.get(), logLevel);
     }
 
-    if (connection()->hasXKB()) {
+    if (usesXkbDevice()) {
         m_xkbKeymap.reset(xkb_x11_keymap_new_from_device(m_xkbContext.get(), xcb_connection(),
                                                          core_device_id, XKB_KEYMAP_COMPILE_NO_FLAGS));
         if (m_xkbKeymap)
@@ -507,15 +507,19 @@ QXcbKeyboard::QXcbKeyboard(QXcbConnection *connection)
     if (connection->hasXKB()) {
         selectEvents();
         core_device_id = xkb_x11_get_core_keyboard_device_id(xcb_connection());
-        if (core_device_id == -1) {
-            qCWarning(lcQpaXcb, "failed to get core keyboard device info");
-            return;
-        }
-    } else {
-        m_key_symbols = xcb_key_symbols_alloc(xcb_connection());
+        if (core_device_id == -1)
+            qCWarning(lcQpaXcb, "failed to get core keyboard device info, using the core keymap");
     }
+    if (!usesXkbDevice())
+        m_key_symbols = xcb_key_symbols_alloc(xcb_connection());
 
     updateKeymap();
+}
+
+// An Xnamespace can refuse the XKB device, while still allowing the core keyboard mapping.
+bool QXcbKeyboard::usesXkbDevice() const
+{
+    return connection()->hasXKB() && core_device_id != -1;
 }
 
 QXcbKeyboard::~QXcbKeyboard()
@@ -694,7 +698,7 @@ static inline void applyModifier(uint *mask, int modifierBit)
 
 void QXcbKeyboard::updateModifiers(const KeysymModifierMap &keysymMods)
 {
-    if (connection()->hasXKB()) {
+    if (usesXkbDevice()) {
         updateVModMapping();
         updateVModToRModMapping();
     } else {

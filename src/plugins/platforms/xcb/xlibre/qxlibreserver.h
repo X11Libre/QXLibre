@@ -19,6 +19,8 @@ public:
 
     QByteArray vendor() const { return m_vendor; }
     bool isXLibre() const { return m_vendor == "XLibre"; }
+    // True if the server refuses access to the root window, as inside an Xnamespace.
+    bool isRootRestricted() const { return m_rootRestricted; }
 
     // True if QT_XLIBRE_NO_<feature> is set. Callers read this once at startup.
     static bool isFeatureDisabled(const char *feature);
@@ -31,6 +33,7 @@ public:
 
 private:
     QByteArray m_vendor;
+    bool m_rootRestricted = false;
 };
 
 QT_END_NAMESPACE

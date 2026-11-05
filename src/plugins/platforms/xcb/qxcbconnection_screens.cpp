@@ -464,12 +464,10 @@ void QXcbConnection::initializeScreensFromMonitor(xcb_screen_iterator_t *it, int
     xcb_randr_get_monitors_cookie_t monitors_c = xcb_randr_get_monitors(xcb_connection(), xcbScreen->root, 1);
     xcb_randr_get_monitors_reply_t *monitors_r = xcb_randr_get_monitors_reply(xcb_connection(), monitors_c, nullptr);
 
-    if (!monitors_r) {
-        qWarning("RANDR GetMonitors failed; this should not be possible");
-        return;
-    }
-
-    xcb_randr_monitor_info_iterator_t monitor_iter = xcb_randr_get_monitors_monitors_iterator(monitors_r);
+    // Without monitors (e.g. denied inside an Xnamespace), fall through to the fake screen below.
+    xcb_randr_monitor_info_iterator_t monitor_iter{};
+    if (monitors_r)
+        monitor_iter = xcb_randr_get_monitors_monitors_iterator(monitors_r);
     while (monitor_iter.rem) {
         xcb_randr_monitor_info_t *monitor_info = monitor_iter.data;
         QXcbScreen *screen = nullptr;
