@@ -49,8 +49,8 @@ the runs, so differences between runs are large. Figures are medians, and the ra
 
 ### Kept: update requests at the vblank
 
-`QWindow::requestUpdate()` is delivered at the next vblank using `xcb_present_notify_msc()`, instead of Qt's 5 ms
-timer. `QT_XLIBRE_NO_VBLANK_UPDATES=1` turns it off.
+On raster windows, `QWindow::requestUpdate()` is delivered at the next vblank using `xcb_present_notify_msc()`, instead
+of Qt's 5 ms timer. `QT_XLIBRE_NO_VBLANK_UPDATES=1` turns it off.
 
 | `rasterwindow`, 5 s | Timer | Vblank | Change |
 |---|---:|---:|---:|

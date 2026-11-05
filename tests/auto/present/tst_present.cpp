@@ -15,8 +15,13 @@ private slots:
     void cleanupTestCase();
     void updatesFollowTheVblank();
     void offSwitchUsesTheTimer();
+    void slowFramesLeaveRoomForTimers();
     void hiddenWindowGetsItsUpdate();
     void updateSurvivesError();
+    void updateSurvivesRecreation();
+    void lostWindowKeepsVblankUpdates();
+    void otherNotificationsDontDeliver();
+    void otherSurfacesUseTheTimer();
 
 private:
     QByteArray run(const QByteArray &scenario, bool offSwitch = false) const;
@@ -101,6 +106,12 @@ void tst_Present::offSwitchUsesTheTimer()
     QVERIFY2(rate > 100, output.constData());
 }
 
+void tst_Present::slowFramesLeaveRoomForTimers()
+{
+    const QByteArray output = run("slow-frames");
+    QVERIFY2(field(output, "timer-fires").toInt() >= 5, output.constData());
+}
+
 void tst_Present::hiddenWindowGetsItsUpdate()
 {
     const QByteArray output = run("update-hidden");
@@ -111,6 +122,37 @@ void tst_Present::updateSurvivesError()
 {
     const QByteArray output = run("update-error");
     QCOMPARE(field(output, "update-delivered"), "yes");
+    // After the error, the timer is what delivers.
+    QVERIFY2(field(output, "updates-per-second").toInt() > 100, output.constData());
+}
+
+void tst_Present::updateSurvivesRecreation()
+{
+    const QByteArray output = run("update-recreated");
+    QCOMPARE(field(output, "update-delivered"), "yes");
+}
+
+void tst_Present::lostWindowKeepsVblankUpdates()
+{
+    const QByteArray output = run("update-window-lost");
+    QCOMPARE(field(output, "update-delivered"), "yes");
+    const int rate = field(output, "updates-per-second").toInt();
+    QVERIFY2(rate >= 50 && rate <= 70, output.constData());
+}
+
+void tst_Present::otherNotificationsDontDeliver()
+{
+    const QByteArray output = run("other-notifications");
+    const int rate = field(output, "updates-per-second").toInt();
+    QVERIFY2(rate >= 50 && rate <= 70, output.constData());
+}
+
+void tst_Present::otherSurfacesUseTheTimer()
+{
+    const QByteArray output = run("opengl-surface");
+    if (field(output, "no-opengl") == "yes")
+        QSKIP("Needs OpenGL");
+    QVERIFY2(field(output, "updates-per-second").toInt() > 100, output.constData());
 }
 
 QTEST_GUILESS_MAIN(tst_Present)

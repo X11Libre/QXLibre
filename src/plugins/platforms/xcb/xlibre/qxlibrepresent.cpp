@@ -88,15 +88,28 @@ void QXLibrePresent::handleEvent(const xcb_generic_event_t *event)
         return;
     m_vblankUpdates.erase(update);
 
-    QXcbWindow *window = m_connection->platformWindowFromId(complete->window);
-    if (window && window->hasPendingUpdateRequest())
-        window->deliverUpdateRequest();
+    const xcb_window_t windowId = complete->window;
+    QMetaObject::invokeMethod(m_connection, [connection = m_connection, windowId] {
+        QXcbWindow *window = connection->platformWindowFromId(windowId);
+        if (window && window->hasPendingUpdateRequest())
+            window->deliverUpdateRequest();
+    }, Qt::QueuedConnection);
 }
 
 void QXLibrePresent::handleError(const xcb_generic_error_t *error)
 {
     if (!m_active || error->major_code != m_majorOpcode)
         return;
+
+    // Another client can destroy our window. That says nothing about Present itself.
+    if (error->error_code == XCB_WINDOW) {
+        if (m_vblankUpdates.remove(error->resource_id)) {
+            QXcbWindow *window = m_connection->platformWindowFromId(error->resource_id);
+            if (window && window->hasPendingUpdateRequest())
+                window->QPlatformWindow::requestUpdate();
+        }
+        return;
+    }
 
     qWarning("QXLibre: turning vblank updates off after X error %d on request %d",
              error->error_code, error->minor_code);
