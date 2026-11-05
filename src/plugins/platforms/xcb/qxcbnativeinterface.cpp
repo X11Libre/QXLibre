@@ -221,6 +221,8 @@ QPlatformNativeInterface::NativeResourceForIntegrationFunction QXcbNativeInterfa
     if (func)
         return func;
 
+    if (lowerCaseResource == "qxlibresynccount")
+        return NativeResourceForIntegrationFunction(reinterpret_cast<void *>(QXLibreServer::syncCount));
     if (lowerCaseResource == "setstartupid")
         return NativeResourceForIntegrationFunction(reinterpret_cast<void *>(setStartupId));
     if (lowerCaseResource == "generatepeekerid")
