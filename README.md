@@ -25,6 +25,9 @@ build as standalone tests.
   platforms that can do it. Windows animating this way use much less CPU (see
   [the measurements](tests/manual/perf/README.md)). Qt Widgets don't use it. Set
   `QT_XLIBRE_NO_VBLANK_UPDATES=1` to turn it off.
+- **Fewer round trips:** software-rendered windows learn from MIT-SHM completion events that the server has
+  finished reading their memory, so painting usually doesn't have to block on a round trip to find out (see
+  [the measurements](tests/manual/perf/README.md)). Set `QT_XLIBRE_NO_SHM_COMPLETION=1` to turn it off.
 - **Xnamespace:** applications run inside XLibre's containers, where Qt's own plugin crashes at startup.
   There's no monitor list or hot-plug there, GLX is off, and `QCursor::pos()` isn't expected to work,
   because the server hides those from a client. Typing needs server fix `31336c8a4b`, which isn't in

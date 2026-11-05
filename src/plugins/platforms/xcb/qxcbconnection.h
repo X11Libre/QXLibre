@@ -21,6 +21,7 @@
 #include "qxcbconnection_basic.h"
 #include "xlibre/qxlibrepresent.h"
 #include "xlibre/qxlibreserver.h"
+#include "xlibre/qxlibreshmuploads.h"
 
 #include <memory>
 
@@ -212,6 +213,7 @@ public:
     QTimer &focusInTimer() { return m_focusInTimer; }
     const QXLibreServer *xlibreServer() const { return m_xlibreServer.get(); }
     QXLibrePresent *xlibrePresent() const { return m_xlibrePresent.get(); }
+    QXLibreShmUploads *xlibreShmUploads() const { return m_xlibreShmUploads.get(); }
 
 protected:
     bool event(QEvent *e) override;
@@ -332,6 +334,7 @@ private:
     QXcbEventQueue *m_eventQueue = nullptr;
     std::unique_ptr<QXLibreServer> m_xlibreServer;
     std::unique_ptr<QXLibrePresent> m_xlibrePresent;
+    std::unique_ptr<QXLibreShmUploads> m_xlibreShmUploads;
 
     WindowMapper m_mapper;
 

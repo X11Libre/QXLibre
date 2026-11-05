@@ -45,6 +45,7 @@ qt_internal_add_module(XLibreQpaPrivate
         qxcbxsettings.cpp qxcbxsettings.h
         xlibre/qxlibrepresent.cpp xlibre/qxlibrepresent.h
         xlibre/qxlibreserver.cpp xlibre/qxlibreserver.h
+        xlibre/qxlibreshmuploads.cpp xlibre/qxlibreshmuploads.h
     DEFINES
         QT_BUILD_XCB_PLUGIN
     INCLUDE_DIRECTORIES

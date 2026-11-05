@@ -66,6 +66,7 @@ QXcbConnection::QXcbConnection(QXcbNativeInterface *nativeInterface, bool canGra
 
     m_xlibreServer = std::make_unique<QXLibreServer>(xcb_connection());
     m_xlibrePresent = QXLibrePresent::create(this);
+    m_xlibreShmUploads = QXLibreShmUploads::create(this);
     m_eventQueue = new QXcbEventQueue(this);
 
     if (hasXRandr())
@@ -274,6 +275,10 @@ void QXcbConnection::printXcbEvent(const QLoggingCategory &log, const char *mess
     // XFixes
     if (isXFixesType(response_type, XCB_XFIXES_SELECTION_NOTIFY))
           PRINT_AND_RETURN("XCB_XFIXES_SELECTION_NOTIFY");
+
+    // MIT-SHM
+    if (m_xlibreShmUploads && m_xlibreShmUploads->isCompletion(response_type))
+        PRINT_AND_RETURN("XCB_SHM_COMPLETION");
 
     // XRandR
     if (isXRandrType(response_type, XCB_RANDR_NOTIFY))
@@ -718,7 +723,9 @@ void QXcbConnection::handleXcbEvent(xcb_generic_event_t *event)
         return;
 
     handled = true;
-    if (isXFixesType(response_type, XCB_XFIXES_SELECTION_NOTIFY)) {
+    if (m_xlibreShmUploads && m_xlibreShmUploads->isCompletion(response_type)) {
+        m_xlibreShmUploads->handleCompletion(event);
+    } else if (isXFixesType(response_type, XCB_XFIXES_SELECTION_NOTIFY)) {
         auto notify_event = reinterpret_cast<xcb_xfixes_selection_notify_event_t *>(event);
         setTime(notify_event->timestamp);
 #ifndef QT_NO_CLIPBOARD

@@ -75,6 +75,7 @@ private:
 
     void ensureGC(xcb_drawable_t dst);
     void shmPutImage(xcb_drawable_t drawable, const QRegion &region, const QPoint &offset = QPoint());
+    void waitForShmUploads();
     void flushPixmap(const QRegion &region, bool fullRegion = false);
     void setClip(const QRegion &region);
 
@@ -103,6 +104,7 @@ private:
 
     // When using shared memory this is the region currently shared with the server
     QRegion m_dirtyShm;
+    uint m_lastShmUpload = 0;
 
     // When not using shared memory this is a temporary buffer which is uploaded
     // as a pixmap region to server
@@ -279,10 +281,8 @@ void QXcbBackingStoreImage::flushScrolledRegion(bool clientSideScroll)
     if (m_scrolledRegion.isNull())
         return;
 
-    if (hasShm() && m_dirtyShm.intersects(m_scrolledRegion)) {
-        connection()->sync();
-        m_dirtyShm = QRegion();
-    }
+    if (hasShm() && m_dirtyShm.intersects(m_scrolledRegion))
+        waitForShmUploads();
 
     if (m_clientSideScroll) {
         // Copy scrolled image region from server-side pixmap to client-side memory
@@ -568,23 +568,33 @@ static inline quint32 round_up_scanline(quint32 base, quint32 pad)
 
 void QXcbBackingStoreImage::shmPutImage(xcb_drawable_t drawable, const QRegion &region, const QPoint &offset)
 {
+    const bool wantCompletion = connection()->xlibreShmUploads();
+    const QRect *lastRect = region.isEmpty() ? nullptr : region.end() - 1;
     for (const QRect &rect : region) {
         const QPoint source = rect.translated(offset).topLeft();
-        xcb_shm_put_image(xcb_connection(),
-                          drawable,
-                          m_gc,
-                          m_xcb_image->width,
-                          m_xcb_image->height,
-                          source.x(), source.y(),
-                          rect.width(), rect.height(),
-                          rect.x(), rect.y(),
-                          m_xcb_image->depth,
-                          m_xcb_image->format,
-                          0, // send event?
-                          m_shm_info.shmseg,
-                          m_xcb_image->data - m_shm_info.shmaddr);
+        m_lastShmUpload = xcb_shm_put_image(xcb_connection(),
+                                            drawable,
+                                            m_gc,
+                                            m_xcb_image->width,
+                                            m_xcb_image->height,
+                                            source.x(), source.y(),
+                                            rect.width(), rect.height(),
+                                            rect.x(), rect.y(),
+                                            m_xcb_image->depth,
+                                            m_xcb_image->format,
+                                            wantCompletion && &rect == lastRect, // send event?
+                                            m_shm_info.shmseg,
+                                            m_xcb_image->data - m_shm_info.shmaddr).sequence;
     }
     m_dirtyShm |= region.translated(offset);
+}
+
+void QXcbBackingStoreImage::waitForShmUploads()
+{
+    const QXLibreShmUploads *uploads = connection()->xlibreShmUploads();
+    if (!uploads || !uploads->isFinished(m_lastShmUpload))
+        connection()->sync();
+    m_dirtyShm = QRegion();
 }
 
 void QXcbBackingStoreImage::flushPixmap(const QRegion &region, bool fullRegion)
@@ -727,10 +737,8 @@ void QXcbBackingStoreImage::preparePaint(const QRegion &region)
 {
     if (hasShm()) {
         // to prevent X from reading from the image region while we're writing to it
-        if (m_dirtyShm.intersects(region)) {
-            connection()->sync();
-            m_dirtyShm = QRegion();
-        }
+        if (m_dirtyShm.intersects(region))
+            waitForShmUploads();
     }
     m_scrolledRegion -= region;
     m_pendingFlush |= region;
