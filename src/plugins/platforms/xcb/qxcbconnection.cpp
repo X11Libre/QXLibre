@@ -447,13 +447,13 @@ const char *xcb_protocol_request_codes[] =
 
 void QXcbConnection::handleXcbError(xcb_generic_error_t *error)
 {
+    if (m_xlibrePresent)
+        m_xlibrePresent->handleError(error);
+
     qintptr result = 0;
     QAbstractEventDispatcher* dispatcher = QAbstractEventDispatcher::instance();
     if (dispatcher && dispatcher->filterNativeEvent(m_nativeInterface->nativeEventType(), error, &result))
         return;
-
-    if (m_xlibrePresent)
-        m_xlibrePresent->handleError(error);
 
     printXcbError("QXcbConnection: XCB error", error);
 }

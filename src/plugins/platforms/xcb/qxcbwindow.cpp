@@ -487,6 +487,9 @@ void QXcbWindow::create()
                     transientChild->updateWmTransientFor();
             }
         }
+        // The old window took its vblank notification with it.
+        if (old_m_window && hasPendingUpdateRequest())
+            requestUpdate();
     }
 }
 
@@ -528,8 +531,11 @@ QXcbForeignWindow::~QXcbForeignWindow()
 void QXcbWindow::requestUpdate()
 {
     QXLibrePresent *present = connection()->xlibrePresent();
-    if (!present || !present->requestVblankUpdate(m_window))
+    // Drivers presenting on other surfaces would see these notifications too.
+    if (!present || window()->surfaceType() != QSurface::RasterSurface
+        || !present->requestVblankUpdate(m_window)) {
         QPlatformWindow::requestUpdate();
+    }
 }
 
 void QXcbWindow::destroy()
