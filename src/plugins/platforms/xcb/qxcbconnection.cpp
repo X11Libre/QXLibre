@@ -65,6 +65,7 @@ QXcbConnection::QXcbConnection(QXcbNativeInterface *nativeInterface, bool canGra
         return;
 
     m_xlibreServer = std::make_unique<QXLibreServer>(xcb_connection());
+    m_xlibrePresent = QXLibrePresent::create(this);
     m_eventQueue = new QXcbEventQueue(this);
 
     if (hasXRandr())
@@ -446,6 +447,9 @@ void QXcbConnection::handleXcbError(xcb_generic_error_t *error)
     if (dispatcher && dispatcher->filterNativeEvent(m_nativeInterface->nativeEventType(), error, &result))
         return;
 
+    if (m_xlibrePresent)
+        m_xlibrePresent->handleError(error);
+
     printXcbError("QXcbConnection: XCB error", error);
 }
 
@@ -702,6 +706,8 @@ void QXcbConnection::handleXcbEvent(xcb_generic_event_t *event)
         // Here the windowEventListener is invoked from xi2HandleEvent()
         if (hasXInput2() && isXIEvent(event))
             xi2HandleEvent(reinterpret_cast<xcb_ge_event_t *>(event));
+        else if (m_xlibrePresent)
+            m_xlibrePresent->handleEvent(event);
         break;
     default:
         handled = false; // event type not recognized

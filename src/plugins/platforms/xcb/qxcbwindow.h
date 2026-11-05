@@ -60,6 +60,7 @@ public:
     void setWindowState(Qt::WindowStates state) override;
     WId winId() const override;
     void setParent(const QPlatformWindow *window) override;
+    void requestUpdate() override;
 
     bool isExposed() const override;
     bool isEmbedded() const override;

@@ -525,8 +525,17 @@ QXcbForeignWindow::~QXcbForeignWindow()
         connection()->setMousePressWindow(nullptr);
 }
 
+void QXcbWindow::requestUpdate()
+{
+    QXLibrePresent *present = connection()->xlibrePresent();
+    if (!present || !present->requestVblankUpdate(m_window))
+        QPlatformWindow::requestUpdate();
+}
+
 void QXcbWindow::destroy()
 {
+    if (QXLibrePresent *present = connection()->xlibrePresent())
+        present->forgetWindow(m_window);
     if (connection()->focusWindow() == this)
         doFocusOut();
     if (connection()->mouseGrabber() == this)
