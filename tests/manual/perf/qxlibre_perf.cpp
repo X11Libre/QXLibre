@@ -1,10 +1,16 @@
 // Prints one CSV line of timing and X traffic for a software-rendered window scenario.
-// Usage: qxlibre_perf <fullrepaint1080p|fullrepaint4k|scrolltext|scrolllist|partial|resize> [frames]
+// Usage: qxlibre_perf <fullrepaint1080p|fullrepaint4k|scrolltext|scrolllist|partial|resize|update> [frames]
+//        qxlibre_perf rasterwindow [seconds]
 
 #include <QtCore/qelapsedtimer.h>
+#include <QtCore/qfile.h>
+#include <QtCore/qeventloop.h>
 #include <QtCore/qstringlistmodel.h>
+#include <QtCore/qtimer.h>
 #include <QtGui/qpainter.h>
+#include <QtGui/qrasterwindow.h>
 #include <QtGui/qscreen.h>
+#include <QtGui/qwindow.h>
 #include <QtWidgets/qapplication.h>
 #include <QtWidgets/qlistview.h>
 #include <QtWidgets/qscrollbar.h>
@@ -14,8 +20,10 @@
 #include <xcb/xcb.h>
 
 #include <sys/resource.h>
+#include <unistd.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <functional>
 #include <memory>
@@ -45,10 +53,86 @@ double cpuMilliseconds()
             + usage.ru_stime.tv_sec * 1e3 + usage.ru_stime.tv_usec / 1e3;
 }
 
+// CPU time of the process named by QXLIBRE_PERF_SERVER_PID, or -1 without it.
+double serverCpuMilliseconds()
+{
+    const QByteArray pid = qgetenv("QXLIBRE_PERF_SERVER_PID");
+    QFile file(QString::fromLatin1("/proc/" + pid + "/stat"));
+    if (pid.isEmpty() || !file.open(QIODevice::ReadOnly))
+        return -1;
+    // The name in parentheses can contain spaces; utime and stime are the 12th and 13th fields after it.
+    const QByteArray stat = file.readAll();
+    const QList<QByteArray> fields = stat.mid(stat.lastIndexOf(')') + 2).split(' ');
+    return (fields.value(11).toLongLong() + fields.value(12).toLongLong()) * 1e3 / sysconf(_SC_CLK_TCK);
+}
+
 // Makes each frame include the server's work, not just queueing the requests.
 void waitForServer(xcb_connection_t *connection)
 {
     free(xcb_get_input_focus_reply(connection, xcb_get_input_focus(connection), nullptr));
+}
+
+// A window animating itself with requestUpdate(), as far as the platform lets it.
+class AnimatedWindow : public QRasterWindow
+{
+public:
+    QList<double> intervals;
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        if (m_timer.isValid())
+            intervals << m_timer.nsecsElapsed() / 1e6;
+        m_timer.start();
+        QPainter(this).fillRect(QRect(QPoint(), size()), QColor::fromHsv(intervals.size() % 360, 255, 200));
+        update();
+    }
+
+private:
+    QElapsedTimer m_timer;
+};
+
+// Prints updates per second, the standard deviation of their interval in ms, client and server CPU
+// in ms per second, and the screen's refresh rate.
+int runRasterWindow(int seconds)
+{
+    AnimatedWindow window;
+    window.setFlag(Qt::WindowDoesNotAcceptFocus);
+    window.resize(800, 600);
+    window.show();
+    // A real event loop: spinning on processEvents() would measure the spinning.
+    QEventLoop loop;
+    const auto runFor = [&loop](int milliseconds) {
+        QTimer::singleShot(milliseconds, &loop, &QEventLoop::quit);
+        loop.exec();
+    };
+    runFor(500);
+
+    window.intervals.clear();
+    const double cpuBefore = cpuMilliseconds();
+    const double serverCpuBefore = serverCpuMilliseconds();
+    QElapsedTimer timer;
+    timer.start();
+    runFor(seconds * 1000);
+    const double elapsed = timer.elapsed() / 1e3;
+    const double cpu = (cpuMilliseconds() - cpuBefore) / elapsed;
+    const double serverCpu = (serverCpuMilliseconds() - serverCpuBefore) / elapsed;
+
+    const QList<double> intervals = window.intervals;
+    double mean = 0;
+    for (double interval : intervals)
+        mean += interval;
+    mean /= std::max<qsizetype>(intervals.size(), 1);
+    double variance = 0;
+    for (double interval : intervals)
+        variance += (interval - mean) * (interval - mean);
+    variance /= std::max<qsizetype>(intervals.size(), 1);
+
+    printf("rasterwindow,%s,%d,%.1f,%.3f,%.1f,%.1f,%.1f\n",
+           qEnvironmentVariable("QT_QPA_PLATFORM").toUtf8().constData(), seconds,
+           intervals.size() / elapsed, std::sqrt(variance), cpu, serverCpu,
+           window.screen()->refreshRate());
+    return 0;
 }
 
 } // namespace
@@ -69,6 +153,9 @@ int main(int argc, char **argv)
     std::unique_ptr<QWidget> widget;
     std::function<void(int)> step;
 
+    if (scenario == "rasterwindow"_L1)
+        return runRasterWindow(frames);
+
     if (scenario == "fullrepaint1080p"_L1 || scenario == "fullrepaint4k"_L1) {
         auto *painted = new PaintedWidget;
         widget.reset(painted);
@@ -76,6 +163,14 @@ int main(int argc, char **argv)
         step = [painted](int frame) {
             painted->frame = frame;
             painted->repaint();
+        };
+    } else if (scenario == "update"_L1) {
+        auto *painted = new PaintedWidget;
+        widget.reset(painted);
+        widget->resize(800, 600);
+        step = [painted](int frame) {
+            painted->frame = frame;
+            painted->update();
         };
     } else if (scenario == "partial"_L1) {
         auto *painted = new PaintedWidget;
@@ -126,7 +221,20 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    // Runs on a desktop in use shouldn't take the keyboard focus.
+    widget->setAttribute(Qt::WA_ShowWithoutActivating);
     widget->show();
+    // Nothing is drawn until then, and a run that draws nothing looks very fast.
+    QElapsedTimer exposure;
+    exposure.start();
+    while (!widget->windowHandle()->isExposed() && exposure.elapsed() < 5000) {
+        QCoreApplication::processEvents();
+        waitForServer(connection);
+    }
+    if (!widget->windowHandle()->isExposed()) {
+        fprintf(stderr, "qxlibre_perf: the window was never exposed\n");
+        return 3;
+    }
     for (int i = 0; i < 50; ++i) {
         QCoreApplication::processEvents();
         waitForServer(connection);
@@ -137,20 +245,44 @@ int main(int argc, char **argv)
             native->nativeResourceFunctionForIntegration("qxlibresynccount"));
     const quint64 bytesBefore = xcb_total_written(connection);
     const quintptr syncsBefore = syncFunction ? quintptr(syncFunction()) : 0;
+    const double serverCpuBefore = serverCpuMilliseconds();
     const double cpuBefore = cpuMilliseconds();
+
+    // Without pacing, a client that throttles to the display would skip most of these frames.
+    const int pace = qEnvironmentVariableIntValue("QXLIBRE_PERF_PACE_MS");
 
     QList<double> times;
     times.reserve(frames);
     QElapsedTimer timer;
-    for (int frame = 0; frame < frames; ++frame) {
+    // From an event loop, as in an application, so events from the server are handled between frames.
+    QEventLoop loop;
+    QTimer ticker;
+    ticker.setTimerType(Qt::PreciseTimer);
+    ticker.setInterval(pace);
+    int frame = 0;
+    QObject::connect(&ticker, &QTimer::timeout, &loop, [&] {
         timer.start();
         step(frame);
         QCoreApplication::processEvents();
         waitForServer(connection);
         times << timer.nsecsElapsed() / 1e6;
-    }
+        if (++frame == frames) {
+            ticker.stop();
+            loop.quit();
+        }
+    });
+    ticker.start();
+    loop.exec();
 
     const double cpu = cpuMilliseconds() - cpuBefore;
+    // Work the server hasn't finished yet belongs to these frames too.
+    QElapsedTimer settle;
+    settle.start();
+    while (settle.elapsed() < 100) {
+        QCoreApplication::processEvents();
+        waitForServer(connection);
+    }
+    const double serverCpu = serverCpuMilliseconds() - serverCpuBefore;
     const quint64 bytes = xcb_total_written(connection) - bytesBefore;
     std::sort(times.begin(), times.end());
 
@@ -159,9 +291,9 @@ int main(int argc, char **argv)
             ? QByteArray::number((quintptr(syncFunction()) - syncsBefore) / double(frames), 'f', 2)
             : QByteArray("-");
 
-    printf("%s,%s,%d,%.3f,%.3f,%.3f,%s,%.0f\n", qPrintable(scenario),
+    printf("%s,%s,%d,%.3f,%.3f,%.3f,%s,%.0f,%.3f\n", qPrintable(scenario),
            qEnvironmentVariable("QT_QPA_PLATFORM").toUtf8().constData(), frames,
            times.at(frames / 2), times.at(frames * 99 / 100), cpu / frames, syncs.constData(),
-           double(bytes) / frames);
+           double(bytes) / frames, serverCpu / frames);
     return 0;
 }

@@ -4,6 +4,7 @@ find_package(Qt6 ${PROJECT_VERSION} QUIET CONFIG OPTIONAL_COMPONENTS Qml Quick Q
 if(TARGET Qt::Quick AND TARGET Qt::QuickControls2)
     add_subdirectory(quickpopuptypes)
 endif()
+add_subdirectory(present)
 if(TARGET Qt::Quick AND TARGET Qt::QuickControls2 AND TARGET Qt::Widgets)
     add_subdirectory(xnamespace)
 endif()

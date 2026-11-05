@@ -14,6 +14,8 @@ QT_XLIBRE_DEBUG=1 QT_QPA_PLATFORM=xlibre qxlibre_perf <scenario> [frames]
 | `scrolllist` | Scrolls a long `QListView`, which uses the scrolled-region path |
 | `partial` | Repaints a rectangle the size of a text cursor |
 | `resize` | Resizes and repaints a window |
+| `update` | Repaints a window with `QWidget::update()`, as most applications do |
+| `rasterwindow` | Animates a `QRasterWindow` with `requestUpdate()`. Its second argument is in seconds, and its own columns are below |
 
 The columns are:
 
@@ -23,12 +25,49 @@ The columns are:
   these, and only with `QT_XLIBRE_DEBUG` set, so stock Qt's plugin shows `-`.
 - `bytes_per_frame`: bytes sent to the X server, from `xcb_total_written()`. MIT-SHM image data isn't
   included, because it's shared rather than sent.
+- `server_cpu_ms_per_frame`: the X server's CPU time. Set `QXLIBRE_PERF_SERVER_PID` to its process ID,
+  or this column is meaningless. Work moved into the server can look like a saving without it.
+
+Set `QXLIBRE_PERF_PACE_MS` to wait that long between frames, from an event loop. Without it, the tool draws far faster than
+the display refreshes.
 
 ## Keeping a feature
 
 A performance feature stays only if it improves p99 frame time or CPU per frame by at least 10% in
 some scenario, and regresses none by more than 2%. Measure with a compositor on and off, and over
-enough runs that the change is larger than the difference between runs below.
+enough runs that the change is larger than the difference between runs below. Include a paced run: a
+feature that throttles to the display otherwise looks faster because it drops frames.
+
+`rasterwindow` prints updates per second, the standard deviation of the update interval in ms, client
+and server CPU in ms per second, and the screen's refresh rate.
+
+## Results on real hardware, 2026-11-05
+
+An AMD Navi 44 on the `amdgpu` driver, with glamor, page flipping enabled and `TearFree` on `auto`, at 60 Hz,
+with XLibre 25.1.9, sonic-win and qtbase 6.12.0. It was a desktop in use, with a load average of up to 11 during
+the runs, so differences between runs are large. Figures are medians, and the ranges are the lowest and highest run.
+
+### Kept: update requests at the vblank
+
+`QWindow::requestUpdate()` is delivered at the next vblank using `xcb_present_notify_msc()`, instead of Qt's 5 ms
+timer. `QT_XLIBRE_NO_VBLANK_UPDATES=1` turns it off.
+
+| `rasterwindow`, 5 s | Timer | Vblank | Change |
+|---|---:|---:|---:|
+| Compositor on, 5 runs: updates per second | 187.4 | 60.0 | |
+| Client CPU, ms/s | 42.8 (34.5-44.0) | 16.8 (15.7-19.0) | -61% |
+| Server CPU, ms/s | 101.0 (86.3-106.8) | 51.4 (45.7-59.1) | -49% |
+| Interval standard deviation, ms | 0.077 | 0.073 | -5% |
+| Compositor off, 10 runs: updates per second | 178.5 | 60.0 | |
+| Client CPU, ms/s | 67.7 (51.1-75.9) | 31.1 (21.2-32.9) | -54% |
+| Server CPU, ms/s | 166.6 (116.5-195.8) | 105.2 (64.8-110.5) | -37% |
+| Interval standard deviation, ms | 0.198 | 0.119 | -40% |
+
+- The saving comes from no longer drawing about two frames in three that a 60 Hz display can't show.
+- It helps windows that animate with `requestUpdate()`, such as `QRasterWindow`. Qt Widgets don't use it, so they
+  neither gain nor lose.
+- Not measured on this GPU: Qt Quick and OpenGL windows, which were only tested for correct behaviour on `llvmpipe`, and
+  Vulkan. Displays other than 60 Hz weren't tried. A display that's blanked slows these windows to the server's 1 Hz.
 
 ## Baseline, 2026-11-05
 

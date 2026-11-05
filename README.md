@@ -14,8 +14,21 @@ on a Qt with no X11 support, so Qt apps that only need a window on X11 can keep 
   tests gave the same results under QXLibre and Qt's `xcb` plugin on Xvfb.
 - The plugin's own tests pass with stock Qt and with a Qt built without X11.
 
-Not tested yet: rendering on a real GPU (the VM uses `llvmpipe`), Vulkan, session management, and
-`tst_qguiapplication` and `tst_qapplication`, which don't build as standalone tests.
+Not tested yet: Qt Quick or OpenGL on a real GPU (the VM uses `llvmpipe`, and the real GPU run used only
+`qtbase`), Vulkan, session management, and `tst_qguiapplication` and `tst_qapplication`, which don't
+build as standalone tests.
+
+## Features
+
+- **Update requests at the vblank:** on servers with the Present extension, `QWindow::requestUpdate()`
+  is delivered at the display's next vblank instead of from Qt's 5 ms timer, as Qt documents for
+  platforms that can do it. Windows animating this way use much less CPU (see
+  [the measurements](tests/manual/perf/README.md)). Qt Widgets don't use it. Set
+  `QT_XLIBRE_NO_VBLANK_UPDATES=1` to turn it off.
+- **Xnamespace:** applications run inside XLibre's containers, where Qt's own plugin crashes at startup.
+  There's no monitor list or hot-plug there, GLX is off, and `QCursor::pos()` isn't expected to work,
+  because the server hides those from a client. Typing needs server fix `31336c8a4b`, which isn't in
+  XLibre 25.1.11 or 25.2.3.
 
 ## Branches and Qt versions
 
@@ -38,7 +51,7 @@ bounded by the data actually received (`d85a77f165390cc728033e301ca1dc2dd9c2dfb3
 You need Qt's development files with private headers and `Qt6BuildInternals`, plus the xcb, X11,
 xkbcommon and EGL libraries that Qt's own plugin uses (see
 [Qt for X11 Requirements](https://doc.qt.io/qt-6/linux-requirements.html)). `xcb-xinput` must come
-from your system, because QXLibre doesn't bundle a copy.
+from your system, because QXLibre doesn't bundle a copy, and you also need `xcb-present`.
 
 ```sh
 qt-cmake . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/usr

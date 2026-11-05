@@ -43,6 +43,7 @@ qt_internal_add_module(XLibreQpaPrivate
         qxcbwindow.cpp qxcbwindow.h
         qxcbwmsupport.cpp qxcbwmsupport.h
         qxcbxsettings.cpp qxcbxsettings.h
+        xlibre/qxlibrepresent.cpp xlibre/qxlibrepresent.h
         xlibre/qxlibreserver.cpp xlibre/qxlibreserver.h
     DEFINES
         QT_BUILD_XCB_PLUGIN
@@ -57,6 +58,7 @@ qt_internal_add_module(XLibreQpaPrivate
         XCB::UTIL
         XCB::IMAGE
         XCB::KEYSYMS
+        XCB::PRESENT
         XCB::RANDR
         XCB::RENDER
         XCB::RENDERUTIL
