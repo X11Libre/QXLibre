@@ -20,14 +20,6 @@ build as standalone tests.
 
 ## Features
 
-- **Update requests at the vblank:** on servers with the Present extension, `QWindow::requestUpdate()`
-  is delivered at the display's next vblank instead of from Qt's 5 ms timer, as Qt documents for
-  platforms that can do it. Windows animating this way use much less CPU (see
-  [the measurements](tests/manual/perf/README.md)). Qt Widgets don't use it. Set
-  `QT_XLIBRE_NO_VBLANK_UPDATES=1` to turn it off.
-- **Fewer round trips:** software-rendered windows learn from MIT-SHM completion events that the server has
-  finished reading their memory, so painting usually doesn't have to block on a round trip to find out (see
-  [the measurements](tests/manual/perf/README.md)). Set `QT_XLIBRE_NO_SHM_COMPLETION=1` to turn it off.
 - **Xnamespace:** applications run inside XLibre's containers, where Qt's own plugin crashes at startup.
   There's no monitor list or hot-plug there, GLX is off, and `QCursor::pos()` isn't expected to work,
   because the server hides those from a client. Typing needs server fix `31336c8a4b`, which isn't in
@@ -85,6 +77,16 @@ QT_QPA_PLATFORM='xlibre;xcb' yourapp
 
 Qt tries each platform in order, so this falls back to Qt's own plugin, with a warning, if QXLibre
 isn't installed or doesn't match your Qt version. Quote the value, because of the `;`.
+
+To use it for every app, add this line to `/etc/environment`, then log out and back in:
+
+```sh
+QT_QPA_PLATFORM='xlibre;xcb'
+```
+
+For one user, add `export QT_QPA_PLATFORM='xlibre;xcb'` to `~/.profile` instead, if your login path
+reads that file. Don't set it this way if you also use Wayland sessions, because Qt apps there would
+then run through XWayland or fail to start.
 
 On a Qt built without X11, you don't need to set anything: the plugin also claims the `xcb` name, so
 Qt's automatic selection finds it.
