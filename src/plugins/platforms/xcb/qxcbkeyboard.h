@@ -46,6 +46,7 @@ public:
     void updateXKBStateFromXI(void *modInfo, void *groupInfo);
 
     int coreDeviceId() const { return core_device_id; }
+    bool usesXkbDevice() const;
     void updateXKBState(xcb_xkb_state_notify_event_t *state);
 
     void handleStateChanges(xkb_state_component changedComponents);

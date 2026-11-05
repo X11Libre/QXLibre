@@ -6,6 +6,7 @@
 #include <QtCore/qdebug.h>
 
 #include <atomic>
+#include <cstdlib>
 
 QT_BEGIN_NAMESPACE
 
@@ -16,8 +17,16 @@ QXLibreServer::QXLibreServer(xcb_connection_t *connection)
     const xcb_setup_t *setup = xcb_get_setup(connection);
     m_vendor = QByteArray(xcb_setup_vendor(setup), xcb_setup_vendor_length(setup));
 
-    if (isDebugEnabled())
-        qDebug() << "QXLibre: server vendor" << m_vendor << "release" << setup->release_number;
+    const xcb_window_t root = xcb_setup_roots_iterator(setup).data->root;
+    auto cookie = xcb_get_window_attributes(connection, root);
+    auto *reply = xcb_get_window_attributes_reply(connection, cookie, nullptr);
+    m_rootRestricted = !reply;
+    free(reply);
+
+    if (isDebugEnabled()) {
+        qDebug() << "QXLibre: server vendor" << m_vendor << "release" << setup->release_number
+                 << "root restricted" << m_rootRestricted;
+    }
 }
 
 bool QXLibreServer::isFeatureDisabled(const char *feature)
