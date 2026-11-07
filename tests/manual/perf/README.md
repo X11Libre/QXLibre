@@ -31,6 +31,28 @@ The columns are:
 Set `QXLIBRE_PERF_PACE_MS` to wait that long between frames, from an event loop. Without it, the tool draws far faster than
 the display refreshes.
 
+## Measuring a feature on and off
+
+`measure.py` runs interleaved pairs of runs with each feature on and off, and prints the tables below. It needs Python 3
+and a build with `-DQT_BUILD_TESTS=ON`. Run it from your X session, with your Qt's libraries findable:
+
+```sh
+tests/manual/perf/measure.py --build build
+```
+
+It opens windows on your desktop for about 4 minutes, without taking the keyboard focus. Leave the machine alone for as
+long as you can, because other work shows up in the figures.
+
+| Option | What it does |
+|---|---|
+| `--both-compositor-states` | Measures with compositing on, then off, then puts it back, taking about 9 minutes. Needs KWin or sonic-win. With another window manager, switch it yourself and run the script twice |
+| `--xvfb` | Uses a private Xvfb, which leaves your desktop alone but says nothing about a real GPU |
+| `--runs`, `--frames`, `--pace`, `--seconds` | The pairs of runs, frames per scenario run, milliseconds between frames and seconds per `rasterwindow` run. The defaults are 5, 100, 20 and 5 |
+| `--out` | Where the raw CSV files, `stderr.log` and `summary.md` go. By default, a new temporary directory |
+
+It finds the X server to read its CPU time, and warns if it can't. It exits with an error if any run failed. `ctest` runs it
+briefly on a private Xvfb as `qxlibre_perf_script`, only to check that it still works.
+
 ## Keeping a feature
 
 A performance feature stays only if it improves p99 frame time or CPU per frame by at least 10% in
@@ -41,11 +63,11 @@ feature that throttles to the display otherwise looks faster because it drops fr
 `rasterwindow` prints updates per second, the standard deviation of the update interval in ms, client
 and server CPU in ms per second, and the screen's refresh rate.
 
-## Results on real hardware, 2026-11-05
+## Results on real hardware, 2026-11-07
 
 An AMD Navi 44 on the `amdgpu` driver, with glamor, page flipping enabled and `TearFree` on `auto`, at 60 Hz,
-with XLibre 25.1.9, sonic-win and qtbase 6.12.0. It was a desktop in use, with a load average of up to 11 during
-the runs, so differences between runs are large. Figures are medians, and the ranges are the lowest and highest run.
+with XLibre 25.1.9, sonic-win and qtbase 6.12.0, using `measure.py --both-compositor-states`. It was a desktop in use, with a
+load average of up to 2.0 during the runs. Figures are medians, and the ranges are the lowest and highest run.
 
 ### Kept: update requests at the vblank
 
@@ -54,14 +76,14 @@ of Qt's 5 ms timer. `QT_XLIBRE_NO_VBLANK_UPDATES=1` turns it off.
 
 | `rasterwindow`, 5 s | Timer | Vblank | Change |
 |---|---:|---:|---:|
-| Compositor on, 5 runs: updates per second | 187.4 | 60.0 | |
-| Client CPU, ms/s | 42.8 (34.5-44.0) | 16.8 (15.7-19.0) | -61% |
-| Server CPU, ms/s | 101.0 (86.3-106.8) | 51.4 (45.7-59.1) | -49% |
-| Interval standard deviation, ms | 0.077 | 0.073 | -5% |
-| Compositor off, 10 runs: updates per second | 178.5 | 60.0 | |
-| Client CPU, ms/s | 67.7 (51.1-75.9) | 31.1 (21.2-32.9) | -54% |
-| Server CPU, ms/s | 166.6 (116.5-195.8) | 105.2 (64.8-110.5) | -37% |
-| Interval standard deviation, ms | 0.198 | 0.119 | -40% |
+| Compositor on, 5 runs: updates per second | 169.0 | 60.0 | |
+| Client CPU, ms/s | 69.7 (32.9-73.1) | 31.4 (27.4-33.8) | -55% |
+| Server CPU, ms/s | 162.1 (74.3-168.4) | 85.7 (71.6-91.4) | -47% |
+| Interval standard deviation, ms | 0.355 | 0.089 | -75% |
+| Compositor off, 5 runs: updates per second | 165.6 | 60.0 | |
+| Client CPU, ms/s | 62.2 (52.2-65.8) | 28.8 (25.4-29.7) | -54% |
+| Server CPU, ms/s | 122.1 (114.3-127.6) | 51.4 (44.2-73.7) | -58% |
+| Interval standard deviation, ms | 0.320 | 0.074 | -77% |
 
 - The saving comes from no longer drawing about two frames in three that a 60 Hz display can't show.
 - It helps windows that animate with `requestUpdate()`, such as `QRasterWindow`. Qt Widgets don't use it, so they
@@ -72,36 +94,37 @@ of Qt's 5 ms timer. `QT_XLIBRE_NO_VBLANK_UPDATES=1` turns it off.
 ### Kept: fewer round trips
 
 Each upload's last `xcb_shm_put_image()` asks for a completion event. Painting over memory the server was reading calls
-`sync()` only if the latest upload's event hasn't arrived. `QT_XLIBRE_NO_SHM_COMPLETION=1` turns it off.
+`sync()` only if neither that upload's event nor a later one has arrived. `QT_XLIBRE_NO_SHM_COMPLETION=1` turns it off.
 
-Each row compares 5 interleaved pairs of runs of 100 frames at `QXLIBRE_PERF_PACE_MS=20`, with vblank updates on and a load
-average of up to 2.8. It shows blocking syncs per frame and median frame time and p99 in ms, off against on. `lower` counts the
-pairs where the frame time was lower with completion events. Percentages are the median difference between pairs.
+Each row compares 5 interleaved pairs of runs of 100 frames at `QXLIBRE_PERF_PACE_MS=20`, with vblank updates on. It shows
+blocking syncs per frame and median frame time and p99 in ms, off against on. `lower` counts the pairs where the frame time
+was lower with completion events. Percentages are the median difference between pairs.
 
 | Compositor on | Syncs | Median | Change | Lower | p99 | Change | Lower |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `partial` | 1.01 to 0.01 | 0.92 to 0.71 | -22% | 5/5 | 1.34 to 0.97 | -26% | 5/5 |
-| `update` | 1.01 to 0.01 | 1.90 to 1.72 | -10% | 5/5 | 2.94 to 2.20 | -24% | 5/5 |
-| `resize` | 2.00 to 1.00 | 2.63 to 2.13 | -19% | 5/5 | 8.49 to 9.10 | -15% | 3/5 |
-| `fullrepaint1080p` | 1.00 to 0.00 | 5.28 to 5.08 | -3% | 5/5 | 7.19 to 7.31 | +2% | 1/5 |
-| `scrolltext` | 1.04 to 1.00 | 2.31 to 2.13 | -9% | 5/5 | 52.59 to 52.98 | +1% | 2/5 |
-| `scrolllist` | 1.00 to 0.99 | 2.57 to 2.56 | 0% | 3/5 | 11.12 to 11.11 | -12% | 3/5 |
+| `partial` | 1.01 to 0.01 | 0.86 to 0.67 | -24% | 4/5 | 1.07 to 0.80 | -27% | 5/5 |
+| `update` | 1.01 to 0.01 | 1.91 to 1.62 | -14% | 5/5 | 2.42 to 2.24 | -10% | 4/5 |
+| `resize` | 2.00 to 1.00 | 2.54 to 2.05 | -17% | 5/5 | 7.56 to 7.21 | -7% | 4/5 |
+| `fullrepaint1080p` | 1.00 to 0.00 | 5.01 to 4.77 | -4% | 4/5 | 6.45 to 5.97 | -9% | 5/5 |
+| `scrolltext` | 1.04 to 1.00 | 2.09 to 2.02 | -6% | 3/5 | 52.65 to 52.81 | +1% | 2/5 |
+| `scrolllist` | 1.00 to 0.99 | 2.51 to 2.43 | 0% | 2/5 | 10.52 to 10.35 | 0% | 2/5 |
 
 | Compositor off | Syncs | Median | Change | Lower | p99 | Change | Lower |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `partial` | 1.01 to 0.00 | 0.69 to 0.42 | -35% | 5/5 | 1.34 to 0.68 | -57% | 4/5 |
-| `update` | 1.01 to 0.00 | 1.63 to 1.38 | -16% | 5/5 | 2.61 to 2.02 | -23% | 5/5 |
-| `resize` | 2.00 to 0.99 | 2.62 to 2.19 | -15% | 5/5 | 11.57 to 9.48 | -18% | 5/5 |
-| `fullrepaint1080p` | 1.00 to 0.00 | 4.81 to 4.49 | -7% | 4/5 | 6.41 to 6.41 | -5% | 3/5 |
-| `scrolltext` | 1.05 to 1.00 | 2.21 to 2.50 | +13% | 2/5 | 52.12 to 51.84 | -2% | 4/5 |
-| `scrolllist` | 1.00 to 0.99 | 3.67 to 2.58 | -30% | 5/5 | 12.45 to 10.74 | -10% | 3/5 |
+| `partial` | 1.01 to 0.00 | 0.69 to 0.43 | -38% | 5/5 | 0.76 to 0.52 | -38% | 4/5 |
+| `update` | 1.01 to 0.00 | 1.65 to 1.39 | -15% | 5/5 | 2.26 to 1.64 | -20% | 4/5 |
+| `resize` | 2.00 to 0.99 | 2.46 to 2.09 | -17% | 5/5 | 9.96 to 9.03 | -1% | 4/5 |
+| `fullrepaint1080p` | 1.00 to 0.00 | 4.59 to 4.26 | -6% | 5/5 | 6.51 to 5.44 | -19% | 5/5 |
+| `scrolltext` | 1.04 to 1.00 | 2.23 to 2.09 | -9% | 4/5 | 52.56 to 51.42 | -2% | 5/5 |
+| `scrolllist` | 1.00 to 0.99 | 2.55 to 2.55 | -6% | 4/5 | 11.17 to 10.24 | -4% | 5/5 |
 
 - The tool makes its own round trip each frame, so these frame times still include one.
-- Client plus server CPU per frame didn't change clearly: `update` went from 3.31 to 3.29 ms with the compositor on and 2.65 to
-  2.50 ms with it off.
-- `scrolltext` and `scrolllist` keep their sync, so differences there show the noise: `scrolltext` CPU changed by -20% with the
-  compositor on and +25% with it off, and `scrolllist` median frame time by 0% and -30%.
-- A frame painted before the last upload's event has been handled still calls `sync()`, as before.
+- Client plus server CPU per frame didn't change clearly. `update` went from 2.56 to 2.33 ms with the compositor on and 2.13 to
+  1.98 ms with it off. With the compositor on, `partial`, `fullrepaint1080p` and `scrolllist` each rose by about 4%, and with it
+  off the same three fell.
+- `scrolltext` and `scrolllist` keep their sync, so differences there show the noise: `scrolltext` CPU changed by -5% with the
+  compositor on and -18% with it off, and `scrolllist` median frame time by 0% and -6%.
+- A frame painted before that event or a later one has been handled still calls `sync()`, as before.
 
 ## Baseline, 2026-11-05
 
