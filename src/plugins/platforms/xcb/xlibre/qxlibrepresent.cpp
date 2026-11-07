@@ -5,6 +5,7 @@
 
 #include "qxcbconnection.h"
 #include "qxcbwindow.h"
+#include "qxlibreanimationdriver.h"
 #include "qxlibreserver.h"
 
 #include <QtCore/qdebug.h>
@@ -47,10 +48,51 @@ QXLibrePresent::QXLibrePresent(QXcbConnection *connection, uint8_t majorOpcode)
 {
 }
 
-bool QXLibrePresent::requestVblankUpdate(xcb_window_t window)
+// The plugin is destroyed after the event dispatcher, which is too late for Qt to restart its own
+// animation timer, as uninstalling a running driver does.
+static std::unique_ptr<QXLibreAnimationDriver> *s_animationDriver = nullptr;
+
+static void uninstallAnimationDriver()
+{
+    if (s_animationDriver)
+        s_animationDriver->reset();
+}
+
+QXLibrePresent::~QXLibrePresent()
+{
+    if (s_animationDriver == &m_animationDriver) {
+        s_animationDriver = nullptr;
+        qRemovePostRoutine(uninstallAnimationDriver);
+    }
+}
+
+void QXLibrePresent::useFrameDrivenAnimations(const QWindow *window)
+{
+    if (!window->inherits("QQuickWindow"))
+        return;
+    m_animationDriverDecided = true;
+    // A raster QQuickWindow means the software backend, which applies to the whole process, so no
+    // other render loop can want to install a driver. Its threaded loop does install one.
+    if (qgetenv("QSG_RENDER_LOOP") == "threaded" || QXLibreServer::isFeatureDisabled("VBLANK_ANIMATIONS"))
+        return;
+    // This can be running inside an animation tick, which is no place to change drivers.
+    QMetaObject::invokeMethod(m_connection, [this] {
+        if (!m_active)
+            return;
+        m_animationDriver = std::make_unique<QXLibreAnimationDriver>();
+        m_animationDriver->install();
+        s_animationDriver = &m_animationDriver;
+        qAddPostRoutine(uninstallAnimationDriver);
+    }, Qt::QueuedConnection);
+}
+
+bool QXLibrePresent::requestVblankUpdate(xcb_window_t window, const QWindow *qwindow)
 {
     if (!m_active || !window)
         return false;
+
+    if (!m_animationDriverDecided)
+        useFrameDrivenAnimations(qwindow);
 
     xcb_connection_t *xcbConnection = m_connection->xcb_connection();
     // This ends when the window does. Selecting again would deliver each event twice.
@@ -89,10 +131,12 @@ void QXLibrePresent::handleEvent(const xcb_generic_event_t *event)
     m_vblankUpdates.erase(update);
 
     const xcb_window_t windowId = complete->window;
-    QMetaObject::invokeMethod(m_connection, [connection = m_connection, windowId] {
-        QXcbWindow *window = connection->platformWindowFromId(windowId);
+    QMetaObject::invokeMethod(m_connection, [this, windowId] {
+        QXcbWindow *window = m_connection->platformWindowFromId(windowId);
         if (window && window->hasPendingUpdateRequest())
             window->deliverUpdateRequest();
+        if (m_animationDriver)
+            m_animationDriver->frameDelivered();
     }, Qt::QueuedConnection);
 }
 
@@ -114,6 +158,8 @@ void QXLibrePresent::handleError(const xcb_generic_error_t *error)
     qWarning("QXLibre: turning vblank updates off after X error %d on request %d",
              error->error_code, error->minor_code);
     m_active = false;
+    // Without vblanks to follow, Qt's own timer drives animations again.
+    m_animationDriver.reset();
 
     // Whatever was waiting for a notification still has to be delivered.
     const auto windows = m_vblankUpdates.keys();
