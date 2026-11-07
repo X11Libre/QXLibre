@@ -10,12 +10,18 @@ on a Qt with no X11 support, so Qt apps that only need a window on X11 can keep 
 
 - A complete SonicDE session ran with every Qt process using QXLibre, including the window manager,
   panel and session manager.
-- Qt's own `qscreen`, `qwindow`, `qclipboard`, `qx11info`, `qwidget`, `qquickpopup` and `qquickmenu`
-  tests gave the same results under QXLibre and Qt's `xcb` plugin on Xvfb.
+- Qt's own `qscreen`, `qwindow`, `qclipboard`, `qx11info`, `qwidget`, `qquickpopup`, `qquickmenu`,
+  `qguiapplication` and `qapplication` tests gave the same results under QXLibre and Qt's `xcb` plugin
+  on Xvfb.
+- On an AMD Radeon RX 9060 XT, Qt's OpenGL and Vulkan tests (`qrhi`, `qvulkan`) and nine of its Qt Quick
+  tests pass under both plugins. `qvulkan` also crashes in some runs under both, in the driver's
+  swapchain thread after its tests pass, and not when the driver library is kept loaded.
+- Saving, shutting down and cancelling a shutdown work under both plugins on Xvfb, with `xsm`, a private
+  `ksmserver` and a small test manager. `xsm` also restores a session under both.
 - The plugin's own tests pass with stock Qt and with a Qt built without X11.
 
-Not tested yet: Qt Quick or OpenGL on a real GPU beyond one performance scene (the VM uses `llvmpipe`), Vulkan, session management, and `tst_qguiapplication` and `tst_qapplication`, which don't
-build as standalone tests.
+Not tested yet: restoring a session with `ksmserver` under QXLibre, and logging out of a real desktop
+session.
 
 ## Features
 
