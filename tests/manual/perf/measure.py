@@ -109,6 +109,10 @@ class Runner:
         if server_pid:
             self.environment["QXLIBRE_PERF_SERVER_PID"] = str(server_pid)
 
+    def has_quick(self):
+        return subprocess.run([self.tool, "has-quick"], env=self.environment,
+                              stderr=subprocess.DEVNULL).returncode == 0
+
     def run(self, arguments, extra):
         with open(self.out / "stderr.log", "a") as log:
             try:
@@ -162,7 +166,22 @@ def measure_shm(runner, options, label):
     return rows
 
 
-def vblank_table(rows, title):
+def measure_quick(runner, options, label, backend, extra_backend):
+    """rows: as for measure_vblank. Both features at once, since Qt Quick could gain from either."""
+    off = {"QT_XLIBRE_NO_VBLANK_UPDATES": "1", "QT_XLIBRE_NO_SHM_COMPLETION": "1"}
+    rows = []
+    for run in range(1, options.runs + 1):
+        for mode, extra in (("off", off), ("on", {})):
+            fields = runner.run(["quick", str(options.seconds)], {**extra_backend, **extra})
+            if fields:
+                rows.append([mode, run, *map(float, fields[3:7])])
+    write_csv(options.out / f"quick-{backend}-{label}.csv",
+              ["mode", "run", "updates_per_second", "interval_sd_ms", "client_cpu_ms_per_s",
+               "server_cpu_ms_per_s"], rows)
+    return rows
+
+
+def animation_table(rows, title, before="timer", after="vblank", names=("Timer", "Vblank")):
     def column(mode, index):
         return [row[index] for row in rows if row[0] == mode]
 
@@ -171,17 +190,17 @@ def vblank_table(rows, title):
         return f"{median(values):.1f} ({min(values):.1f}-{max(values):.1f})" if values else "-"
 
     def change(index):
-        return signed(percent(median(column("timer", index)), median(column("vblank", index))))
+        return signed(percent(median(column(before, index)), median(column(after, index))))
 
-    runs = len(column("vblank", 2))
+    runs = len(column(after, 2))
     return [
-        f"| {title}, {runs} runs | Timer | Vblank | Change |",
+        f"| {title}, {runs} runs | {names[0]} | {names[1]} | Change |",
         "|---|---:|---:|---:|",
-        f"| Updates per second | {median(column('timer', 2)):.1f} | {median(column('vblank', 2)):.1f} | |",
-        f"| Client CPU, ms/s | {ranged('timer', 4)} | {ranged('vblank', 4)} | {change(4)} |",
-        f"| Server CPU, ms/s | {ranged('timer', 5)} | {ranged('vblank', 5)} | {change(5)} |",
-        f"| Interval standard deviation, ms | {median(column('timer', 3)):.3f} "
-        f"| {median(column('vblank', 3)):.3f} | {change(3)} |",
+        f"| Updates per second | {median(column(before, 2)):.1f} | {median(column(after, 2)):.1f} | |",
+        f"| Client CPU, ms/s | {ranged(before, 4)} | {ranged(after, 4)} | {change(4)} |",
+        f"| Server CPU, ms/s | {ranged(before, 5)} | {ranged(after, 5)} | {change(5)} |",
+        f"| Interval standard deviation, ms | {median(column(before, 3)):.3f} "
+        f"| {median(column(after, 3)):.3f} | {change(3)} |",
     ]
 
 
@@ -279,8 +298,17 @@ def main():
             start = load_average()
             vblank = measure_vblank(runner, options, label)
             shm = measure_shm(runner, options, label)
-            report += [*vblank_table(vblank, title), "", *shm_table(shm, title), "",
-                       f"Load average {start} at the start and {load_average()} at the end.", ""]
+            report += [*animation_table(vblank, title), "", *shm_table(shm, title), ""]
+            if runner.has_quick():
+                for backend, extra, name in (("default", {}, "Qt Quick"),
+                                             ("software", {"QT_QUICK_BACKEND": "software"},
+                                              "Qt Quick software backend")):
+                    rows = measure_quick(runner, options, label, backend, extra)
+                    report += [*animation_table(rows, f"{title}, {name}", "off", "on",
+                                                ("Features off", "Features on")), ""]
+            else:
+                report += ["Qt Quick wasn't measured, because this build of the tool doesn't have it.", ""]
+            report += [f"Load average {start} at the start and {load_average()} at the end.", ""]
     finally:
         if compositor:
             compositor.restore()

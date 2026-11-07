@@ -14,8 +14,7 @@ on a Qt with no X11 support, so Qt apps that only need a window on X11 can keep 
   tests gave the same results under QXLibre and Qt's `xcb` plugin on Xvfb.
 - The plugin's own tests pass with stock Qt and with a Qt built without X11.
 
-Not tested yet: Qt Quick or OpenGL on a real GPU (the VM uses `llvmpipe`, and the real GPU run used only
-`qtbase`), Vulkan, session management, and `tst_qguiapplication` and `tst_qapplication`, which don't
+Not tested yet: Qt Quick or OpenGL on a real GPU beyond one performance scene (the VM uses `llvmpipe`), Vulkan, session management, and `tst_qguiapplication` and `tst_qapplication`, which don't
 build as standalone tests.
 
 ## Features

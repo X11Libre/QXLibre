@@ -3,6 +3,7 @@
 #include <QtCore/qfile.h>
 #include <QtCore/qprocess.h>
 #include <QtCore/qstandardpaths.h>
+#include <QtCore/qthread.h>
 #include <QtTest/qtest.h>
 
 using namespace Qt::StringLiterals;
@@ -92,7 +93,7 @@ bool tst_ShmUploads::startServer(QProcess &server, QString *display, const QStri
     if (!server.waitForStarted())
         return false;
     for (int i = 0; i < 100 && !QFile::exists(u"/tmp/.X11-unix/X%1"_s.arg(number)); ++i)
-        QTest::qWait(100);
+        QThread::msleep(100);
     return QFile::exists(u"/tmp/.X11-unix/X%1"_s.arg(number));
 }
 

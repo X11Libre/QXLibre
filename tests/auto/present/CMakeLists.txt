@@ -5,6 +5,10 @@ target_link_libraries(present_helper PRIVATE
     XCB::PRESENT
     XCB::XCB
 )
+if(TARGET Qt::Quick)
+    target_compile_definitions(present_helper PRIVATE QXLIBRE_TEST_HAS_QUICK)
+    target_link_libraries(present_helper PRIVATE Qt::Qml Qt::Quick)
+endif()
 
 qt_internal_add_test(tst_present
     SOURCES

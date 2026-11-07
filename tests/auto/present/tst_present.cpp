@@ -22,6 +22,9 @@ private slots:
     void lostWindowKeepsVblankUpdates();
     void otherNotificationsDontDeliver();
     void otherSurfacesUseTheTimer();
+    void softwareQuickFollowsTheVblank();
+    void softwareQuickAfterError();
+    void softwareQuickAnimatesWithoutFrames();
 
 private:
     QByteArray run(const QByteArray &scenario, bool offSwitch = false) const;
@@ -153,6 +156,32 @@ void tst_Present::otherSurfacesUseTheTimer()
     if (field(output, "no-opengl") == "yes")
         QSKIP("Needs OpenGL");
     QVERIFY2(field(output, "updates-per-second").toInt() > 100, output.constData());
+}
+
+void tst_Present::softwareQuickFollowsTheVblank()
+{
+    if (run("has-quick").startsWith("failed"))
+        QSKIP("Needs Qt Quick");
+    const QByteArray output = run("quick-software");
+    const int rate = field(output, "frames-per-second").toInt();
+    QVERIFY2(rate >= 50 && rate <= 70, output.constData());
+    // A frame that misses a vblank shows up here, at about 8 ms on Xvfb.
+    QVERIFY2(field(output, "interval-deviation-tenths").toInt() < 30, output.constData());
+}
+
+void tst_Present::softwareQuickAfterError()
+{
+    if (run("has-quick").startsWith("failed"))
+        QSKIP("Needs Qt Quick");
+    const QByteArray output = run("quick-software-error");
+    QVERIFY2(field(output, "frames-per-second").toInt() > 30, output.constData());
+}
+
+void tst_Present::softwareQuickAnimatesWithoutFrames()
+{
+    if (run("has-quick").startsWith("failed"))
+        QSKIP("Needs Qt Quick");
+    QCOMPARE(field(run("quick-software-hidden"), "animation-finished"), "yes");
 }
 
 QTEST_GUILESS_MAIN(tst_Present)
