@@ -533,7 +533,7 @@ void QXcbWindow::requestUpdate()
     QXLibrePresent *present = connection()->xlibrePresent();
     // Drivers presenting on other surfaces would see these notifications too.
     if (!present || window()->surfaceType() != QSurface::RasterSurface
-        || !present->requestVblankUpdate(m_window)) {
+        || !present->requestVblankUpdate(m_window, window())) {
         QPlatformWindow::requestUpdate();
     }
 }

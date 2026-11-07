@@ -27,9 +27,9 @@ support in Qt, and it keeps working if Qt removes that support. These notes list
   | Animated window, before to after | Desktop effects on | Desktop effects off |
   |---|---|---|
   | Updates per second | 168 to 60 (-64%) | 164 to 60 (-63%) |
-  | Application's processor use, % of one core | 7.2 to 3.1 (-57%) | 6.7 to 3.0 (-56%) |
-  | X server's processor use, % of one core | 16.2 to 8.4 (-48%) | 12.6 to 5.3 (-58%) |
-  | Variation in time between updates, ms | 0.352 to 0.078 (-78%) | 0.295 to 0.070 (-76%) |
+  | Application's processor use, % of one core | 7.1 to 3.1 (-56%) | 6.6 to 3.0 (-54%) |
+  | X server's processor use, % of one core | 17.1 to 9.3 (-46%) | 12.2 to 5.3 (-56%) |
+  | Variation in time between updates, ms | 0.350 to 0.082 (-77%) | 0.299 to 0.069 (-77%) |
 
   Measured on a 60 Hz display with an AMD Radeon graphics card and XLibre 25.1.9, over 5 runs each way with desktop effects
   on and 5 with them off. The desktop was in use during the runs.
@@ -39,33 +39,34 @@ support in Qt, and it keeps working if Qt removes that support. These notes list
 
   | Time per update in ms, before to after | Desktop effects on | Desktop effects off |
   |---|---|---|
-  | Small update, such as a blinking text cursor | 0.93 to 0.69 (-27%) | 0.68 to 0.43 (-38%) |
-  | Slowest 1% of small updates | 1.09 to 0.78 (-29%) | 0.76 to 0.48 (-35%) |
-  | Repainting a window, as most applications do | 1.90 to 1.66 (-13%) | 1.63 to 1.38 (-15%) |
-  | Slowest 1% of those repaints | 2.52 to 2.17 (-16%) | 2.05 to 1.67 (-25%) |
-  | Resizing a window | 2.43 to 2.11 (-13%) | 2.49 to 2.16 (-15%) |
-  | Repainting a full HD window | 4.86 to 4.65 (-5%) | 4.50 to 4.21 (-7%) |
+  | Small update, such as a blinking text cursor | 0.93 to 0.68 (-24%) | 0.68 to 0.42 (-39%) |
+  | Slowest 1% of small updates | 1.11 to 0.81 (-25%) | 1.12 to 0.48 (-57%) |
+  | Repainting a window, as most applications do | 1.94 to 1.68 (-13%) | 1.64 to 1.35 (-17%) |
+  | Slowest 1% of those repaints | 2.47 to 2.19 (-13%) | 1.97 to 1.63 (-14%) |
+  | Resizing a window | 2.33 to 2.08 (-7%) | 2.44 to 2.19 (-11%) |
+  | Repainting a full HD window | 5.04 to 4.71 (-5%) | 4.54 to 4.26 (-6%) |
 
   Measured on the same machine, over 5 pairs of runs of 100 updates each. Times include one trip to the X server that
   the measuring tool adds to every update. Each percentage is the typical difference between a pair of runs, so it can
   differ slightly from the two times beside it.
-- QML applications don't gain from these two changes. Those drawn by the graphics card, as most are, run as before. Those
-  using Qt Quick's software drawing (`QT_QUICK_BACKEND=software`) use a little more processor time, and the time between
-  their updates becomes less even.
+- QML applications drawn by the graphics card, as most are, run as before. Those using Qt Quick's software drawing
+  (`QT_QUICK_BACKEND=software`) now animate in step with your display, so the time between their updates is about three
+  times more even. The application uses slightly more processor time and the X server about the same or slightly less.
+  If you need to, you can turn this off with `QT_XLIBRE_NO_VBLANK_ANIMATIONS=1`.
 
-  | Animated QML window, both changes off to on | Desktop effects on | Desktop effects off |
+  | Animated QML window, before to after | Desktop effects on | Desktop effects off |
   |---|---|---|
   | Drawn by the graphics card: updates per second | 60 to 60 | 60 to 60 |
-  | Application's processor use, % of one core | 3.7 to 3.8 (+3%) | 3.6 to 3.6 (+1%) |
-  | X server's processor use, % of one core | 5.1 to 5.3 (+4%) | 2.5 to 2.5 (+2%) |
-  | Variation in time between updates, ms | 0.129 to 0.111 (-14%) | 0.104 to 0.101 (-3%) |
-  | Software drawing: updates per second | 63 to 58 (-7%) | 63 to 60 (-5%) |
-  | Application's processor use, % of one core | 3.2 to 3.6 (+11%) | 3.1 to 3.5 (+14%) |
-  | X server's processor use, % of one core | 8.0 to 7.8 (-2%) | 3.6 to 3.8 (+5%) |
-  | Variation in time between updates, ms | 0.369 to 2.826 (+666%) | 0.380 to 1.391 (+266%) |
+  | Application's processor use, % of one core | 3.8 to 3.8 (+1%) | 3.7 to 3.7 (-1%) |
+  | X server's processor use, % of one core | 5.9 to 6.1 (+3%) | 2.7 to 2.3 (-15%) |
+  | Variation in time between updates, ms | 0.119 to 0.109 (-8%) | 0.102 to 0.102 (0%) |
+  | Software drawing: updates per second | 63 to 60 (-4%) | 63 to 60 (-4%) |
+  | Application's processor use, % of one core | 3.2 to 3.4 (+6%) | 3.0 to 3.1 (+3%) |
+  | X server's processor use, % of one core | 8.8 to 8.6 (-1%) | 3.6 to 3.4 (-5%) |
+  | Variation in time between updates, ms | 0.382 to 0.117 (-69%) | 0.398 to 0.126 (-68%) |
 
   Measured on the same machine, over 5 runs each way. A 60 Hz display can't show the updates above 60 per second in the
   software drawing rows.
 - Behind the scenes: new automated tests for containers, popups, animation timing, drawing without waiting for the X
-  server and the reported platform name, and a new tool and script that anyone can use to measure drawing performance on
-  their own machine.
+  server and the reported platform name, new session management tests, and a new tool and script that anyone can use to
+  measure drawing performance on their own machine.

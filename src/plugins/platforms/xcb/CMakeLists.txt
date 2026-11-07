@@ -43,6 +43,7 @@ qt_internal_add_module(XLibreQpaPrivate
         qxcbwindow.cpp qxcbwindow.h
         qxcbwmsupport.cpp qxcbwmsupport.h
         qxcbxsettings.cpp qxcbxsettings.h
+        xlibre/qxlibreanimationdriver.cpp xlibre/qxlibreanimationdriver.h
         xlibre/qxlibrepresent.cpp xlibre/qxlibrepresent.h
         xlibre/qxlibreserver.cpp xlibre/qxlibreserver.h
         xlibre/qxlibreshmuploads.cpp xlibre/qxlibreshmuploads.h
