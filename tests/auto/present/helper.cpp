@@ -10,10 +10,16 @@
 #include <QtGui/qrasterwindow.h>
 #include <QtGui/qwindow.h>
 #include <qpa/qplatformnativeinterface.h>
+#ifdef QXLIBRE_TEST_HAS_QUICK
+#include <QtQml/qqmlapplicationengine.h>
+#include <QtQuick/qquickwindow.h>
+#endif
 
 #include <xcb/present.h>
 #include <xcb/xcb.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
@@ -241,8 +247,101 @@ static int runOpenGLSurface()
     return 0;
 }
 
+#ifdef QXLIBRE_TEST_HAS_QUICK
+static QQuickWindow *loadSoftwareScene(QQmlApplicationEngine &engine)
+{
+    engine.loadData(R"(
+        import QtQuick
+        Window {
+            id: root
+            width: 200; height: 200
+            property alias running: finite.running
+            property bool animationDone: false
+            Rectangle {
+                width: 50; height: 50; color: "blue"
+                NumberAnimation on x { from: 0; to: 150; duration: 1000; loops: Animation.Infinite }
+            }
+            Item {
+                id: target
+                NumberAnimation on y {
+                    id: finite
+                    running: false; from: 0; to: 100; duration: 300
+                    onFinished: root.animationDone = true
+                }
+            }
+        }
+    )");
+    return engine.rootObjects().isEmpty()
+            ? nullptr
+            : qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst());
+}
+
+// Runs the scene and prints frames per second and the variation of the time between them.
+static int runQuickSoftwareTiming(bool withError)
+{
+    QQmlApplicationEngine engine;
+    QQuickWindow *window = loadSoftwareScene(engine);
+    if (!window)
+        return 3;
+    QList<qint64> frames;
+    QElapsedTimer clock;
+    clock.start();
+    QObject::connect(window, &QQuickWindow::frameSwapped, window,
+                     [&] { frames << clock.nsecsElapsed(); }, Qt::DirectConnection);
+    window->show();
+    spin(300);
+    if (withError) {
+        // A remainder without a divisor is a BadValue, which turns vblank updates off.
+        xcb_present_notify_msc(connection(), window->winId(), 0, 0, 0, 1);
+        xcb_flush(connection());
+        spin(100);
+    }
+    frames.clear();
+    const qint64 start = clock.nsecsElapsed();
+    spin(2000);
+    const double seconds = (clock.nsecsElapsed() - start) / 1e9;
+    double mean = 0, variance = 0;
+    const qsizetype gaps = frames.size() - 1;
+    for (qsizetype i = 0; i < gaps; ++i)
+        mean += (frames[i + 1] - frames[i]) / 1e6;
+    mean /= std::max<qsizetype>(gaps, 1);
+    for (qsizetype i = 0; i < gaps; ++i) {
+        const double gap = (frames[i + 1] - frames[i]) / 1e6;
+        variance += (gap - mean) * (gap - mean);
+    }
+    variance /= std::max<qsizetype>(gaps, 1);
+    printf("frames-per-second: %d\n", qRound(gaps / seconds));
+    printf("interval-deviation-tenths: %d\n", qRound(std::sqrt(variance) * 10));
+    return 0;
+}
+
+// With no frames coming, animations still have to run and finish.
+static int runQuickSoftwareHidden()
+{
+    QQmlApplicationEngine engine;
+    QQuickWindow *window = loadSoftwareScene(engine);
+    if (!window)
+        return 3;
+    window->show();
+    spin(300);
+    window->hide();
+    spin(50);
+    window->setProperty("running", true);
+    QElapsedTimer timer;
+    timer.start();
+    while (!window->property("animationDone").toBool() && timer.elapsed() < 3000)
+        spin(10);
+    printf("animation-finished: %s\n", window->property("animationDone").toBool() ? "yes" : "no");
+    return 0;
+}
+#endif
+
 int main(int argc, char **argv)
 {
+#ifdef QXLIBRE_TEST_HAS_QUICK
+    if (argc > 1 && QByteArrayView(argv[1]).startsWith("quick-software"))
+        qputenv("QT_QUICK_BACKEND", "software");
+#endif
     QGuiApplication app(argc, argv);
     const QByteArray scenario = argc > 1 ? argv[1] : "";
 
@@ -262,5 +361,15 @@ int main(int argc, char **argv)
         return runOtherNotifications();
     if (scenario == "opengl-surface")
         return runOpenGLSurface();
+#ifdef QXLIBRE_TEST_HAS_QUICK
+    if (scenario == "has-quick")
+        return 0;
+    if (scenario == "quick-software")
+        return runQuickSoftwareTiming(false);
+    if (scenario == "quick-software-error")
+        return runQuickSoftwareTiming(true);
+    if (scenario == "quick-software-hidden")
+        return runQuickSoftwareHidden();
+#endif
     return 2;
 }

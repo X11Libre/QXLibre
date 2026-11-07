@@ -16,6 +16,7 @@ QT_XLIBRE_DEBUG=1 QT_QPA_PLATFORM=xlibre qxlibre_perf <scenario> [frames]
 | `resize` | Resizes and repaints a window |
 | `update` | Repaints a window with `QWidget::update()`, as most applications do |
 | `rasterwindow` | Animates a `QRasterWindow` with `requestUpdate()`. Its second argument is in seconds, and its own columns are below |
+| `quick` | Animates a Qt Quick scene, drawn as `QT_QUICK_BACKEND` chooses. It takes seconds and has the same columns as `rasterwindow`. Only built if Qt Quick is found |
 
 The columns are:
 
@@ -40,13 +41,14 @@ and a build with `-DQT_BUILD_TESTS=ON`. Run it from your X session, with your Qt
 tests/manual/perf/measure.py --build build
 ```
 
-It opens windows on your desktop for about 4 minutes, without taking the keyboard focus. Leave the machine alone for as
-long as you can, because other work shows up in the figures.
+It opens windows on your desktop for about 6 minutes, without taking the keyboard focus. Leave the machine alone and close
+anything busy such as videos, because other work shows up in the figures. If the tool was built with Qt Quick, it also
+measures Qt Quick on the default backend and on the software backend, with both features together on and off.
 
 | Option | What it does |
 |---|---|
-| `--both-compositor-states` | Measures with compositing on, then off, then puts it back, taking about 9 minutes. Needs KWin or sonic-win. With another window manager, switch it yourself and run the script twice |
-| `--xvfb` | Uses a private Xvfb, which leaves your desktop alone but says nothing about a real GPU |
+| `--both-compositor-states` | Measures with compositing on, then off, then puts it back, taking about 12 minutes. Needs KWin or sonic-win. With another window manager, switch it yourself and run the script twice |
+| `--xvfb` | Uses a private Xvfb, which leaves your desktop alone but says nothing about a real GPU. Its vblank is faked, so an animation driven by a timer can look far slower with vblank updates than it does on a real display |
 | `--runs`, `--frames`, `--pace`, `--seconds` | The pairs of runs, frames per scenario run, milliseconds between frames and seconds per `rasterwindow` run. The defaults are 5, 100, 20 and 5 |
 | `--out` | Where the raw CSV files, `stderr.log` and `summary.md` go. By default, a new temporary directory |
 
@@ -66,8 +68,8 @@ and server CPU in ms per second, and the screen's refresh rate.
 ## Results on real hardware, 2026-11-07
 
 An AMD Navi 44 on the `amdgpu` driver, with glamor, page flipping enabled and `TearFree` on `auto`, at 60 Hz,
-with XLibre 25.1.9, sonic-win and qtbase 6.12.0, using `measure.py --both-compositor-states`. It was a desktop in use, with a
-load average of up to 2.0 during the runs. Figures are medians, and the ranges are the lowest and highest run.
+with XLibre 25.1.9, sonic-win and Qt 6.12.0, using `measure.py --both-compositor-states`. It was a quiet desktop, with a load
+average of up to 1.8 during the runs. Figures are medians, and the ranges are the lowest and highest run.
 
 ### Kept: update requests at the vblank
 
@@ -76,20 +78,19 @@ of Qt's 5 ms timer. `QT_XLIBRE_NO_VBLANK_UPDATES=1` turns it off.
 
 | `rasterwindow`, 5 s | Timer | Vblank | Change |
 |---|---:|---:|---:|
-| Compositor on, 5 runs: updates per second | 169.0 | 60.0 | |
-| Client CPU, ms/s | 69.7 (32.9-73.1) | 31.4 (27.4-33.8) | -55% |
-| Server CPU, ms/s | 162.1 (74.3-168.4) | 85.7 (71.6-91.4) | -47% |
-| Interval standard deviation, ms | 0.355 | 0.089 | -75% |
-| Compositor off, 5 runs: updates per second | 165.6 | 60.0 | |
-| Client CPU, ms/s | 62.2 (52.2-65.8) | 28.8 (25.4-29.7) | -54% |
-| Server CPU, ms/s | 122.1 (114.3-127.6) | 51.4 (44.2-73.7) | -58% |
-| Interval standard deviation, ms | 0.320 | 0.074 | -77% |
+| Compositor on, 5 runs: updates per second | 168.0 | 60.0 | |
+| Client CPU, ms/s | 72.1 (70.9-73.6) | 31.3 (30.5-32.0) | -57% |
+| Server CPU, ms/s | 162.1 (158.1-168.5) | 83.8 (81.9-84.2) | -48% |
+| Interval standard deviation, ms | 0.352 | 0.078 | -78% |
+| Compositor off, 5 runs: updates per second | 163.9 | 60.0 | |
+| Client CPU, ms/s | 66.8 (65.6-68.9) | 29.5 (29.0-31.6) | -56% |
+| Server CPU, ms/s | 126.3 (123.8-128.4) | 52.6 (51.4-53.7) | -58% |
+| Interval standard deviation, ms | 0.295 | 0.070 | -76% |
 
 - The saving comes from no longer drawing about two frames in three that a 60 Hz display can't show.
 - It helps windows that animate with `requestUpdate()`, such as `QRasterWindow`. Qt Widgets don't use it, so they
   neither gain nor lose.
-- Not measured on this GPU: Qt Quick and OpenGL windows, which were only tested for correct behaviour on `llvmpipe`, and
-  Vulkan. Displays other than 60 Hz weren't tried. A display that's blanked slows these windows to the server's 1 Hz.
+- Not measured on this GPU: Vulkan. Displays other than 60 Hz weren't tried. A display that's blanked slows these windows to the server's 1 Hz.
 
 ### Kept: fewer round trips
 
@@ -102,29 +103,62 @@ was lower with completion events. Percentages are the median difference between 
 
 | Compositor on | Syncs | Median | Change | Lower | p99 | Change | Lower |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `partial` | 1.01 to 0.01 | 0.86 to 0.67 | -24% | 4/5 | 1.07 to 0.80 | -27% | 5/5 |
-| `update` | 1.01 to 0.01 | 1.91 to 1.62 | -14% | 5/5 | 2.42 to 2.24 | -10% | 4/5 |
-| `resize` | 2.00 to 1.00 | 2.54 to 2.05 | -17% | 5/5 | 7.56 to 7.21 | -7% | 4/5 |
-| `fullrepaint1080p` | 1.00 to 0.00 | 5.01 to 4.77 | -4% | 4/5 | 6.45 to 5.97 | -9% | 5/5 |
-| `scrolltext` | 1.04 to 1.00 | 2.09 to 2.02 | -6% | 3/5 | 52.65 to 52.81 | +1% | 2/5 |
-| `scrolllist` | 1.00 to 0.99 | 2.51 to 2.43 | 0% | 2/5 | 10.52 to 10.35 | 0% | 2/5 |
+| `partial` | 1.01 to 0.01 | 0.93 to 0.69 | -27% | 5/5 | 1.09 to 0.78 | -29% | 4/5 |
+| `update` | 1.01 to 0.01 | 1.90 to 1.66 | -13% | 5/5 | 2.52 to 2.17 | -16% | 5/5 |
+| `resize` | 2.00 to 1.00 | 2.43 to 2.11 | -13% | 5/5 | 8.77 to 7.97 | -26% | 4/5 |
+| `fullrepaint1080p` | 1.00 to 0.00 | 4.86 to 4.65 | -5% | 5/5 | 6.56 to 6.09 | -8% | 5/5 |
+| `scrolltext` | 1.04 to 1.00 | 2.66 to 2.00 | -22% | 4/5 | 51.45 to 51.63 | 0% | 2/5 |
+| `scrolllist` | 1.00 to 0.99 | 2.50 to 2.55 | +5% | 1/5 | 10.70 to 10.61 | +2% | 2/5 |
 
 | Compositor off | Syncs | Median | Change | Lower | p99 | Change | Lower |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `partial` | 1.01 to 0.00 | 0.69 to 0.43 | -38% | 5/5 | 0.76 to 0.52 | -38% | 4/5 |
-| `update` | 1.01 to 0.00 | 1.65 to 1.39 | -15% | 5/5 | 2.26 to 1.64 | -20% | 4/5 |
-| `resize` | 2.00 to 0.99 | 2.46 to 2.09 | -17% | 5/5 | 9.96 to 9.03 | -1% | 4/5 |
-| `fullrepaint1080p` | 1.00 to 0.00 | 4.59 to 4.26 | -6% | 5/5 | 6.51 to 5.44 | -19% | 5/5 |
-| `scrolltext` | 1.04 to 1.00 | 2.23 to 2.09 | -9% | 4/5 | 52.56 to 51.42 | -2% | 5/5 |
-| `scrolllist` | 1.00 to 0.99 | 2.55 to 2.55 | -6% | 4/5 | 11.17 to 10.24 | -4% | 5/5 |
+| `partial` | 1.01 to 0.00 | 0.68 to 0.43 | -38% | 5/5 | 0.76 to 0.48 | -35% | 5/5 |
+| `update` | 1.01 to 0.00 | 1.63 to 1.38 | -15% | 5/5 | 2.05 to 1.67 | -25% | 5/5 |
+| `resize` | 2.00 to 0.99 | 2.49 to 2.16 | -15% | 5/5 | 9.61 to 8.60 | -11% | 4/5 |
+| `fullrepaint1080p` | 1.00 to 0.00 | 4.50 to 4.21 | -7% | 5/5 | 6.05 to 5.06 | -17% | 5/5 |
+| `scrolltext` | 1.05 to 1.00 | 4.82 to 2.50 | -6% | 4/5 | 50.87 to 51.00 | 0% | 3/5 |
+| `scrolllist` | 1.00 to 0.99 | 2.63 to 2.98 | -1% | 3/5 | 10.24 to 10.14 | -1% | 3/5 |
 
 - The tool makes its own round trip each frame, so these frame times still include one.
-- Client plus server CPU per frame didn't change clearly. `update` went from 2.56 to 2.33 ms with the compositor on and 2.13 to
-  1.98 ms with it off. With the compositor on, `partial`, `fullrepaint1080p` and `scrolllist` each rose by about 4%, and with it
-  off the same three fell.
-- `scrolltext` and `scrolllist` keep their sync, so differences there show the noise: `scrolltext` CPU changed by -5% with the
-  compositor on and -18% with it off, and `scrolllist` median frame time by 0% and -6%.
+- Client plus server CPU per frame fell in the scenarios that lost their sync. `update` went from 2.67 to 2.48 ms with the
+  compositor on and 2.14 to 1.98 ms with it off.
+- `scrolltext` and `scrolllist` keep their sync, so differences there show the noise. `scrolltext` CPU fell by 15% in both
+  compositor states. `scrolllist` CPU rose by 18% and 21%, but an earlier run the same day measured +4% and -20%, so that isn't
+  a stable result.
 - A frame painted before that event or a later one has been handled still calls `sync()`, as before.
+
+### Qt Quick: no gain
+
+Both features together, off against on, over 5 runs each. The default backend used OpenGL on `radeonsi`, with the threaded
+render loop.
+
+| Qt Quick, compositor on | Off | On | Change |
+|---|---:|---:|---:|
+| Default backend: updates per second | 60.0 | 60.0 | |
+| Client CPU, ms/s | 37.0 (34.7-38.4) | 38.0 (36.9-39.6) | +3% |
+| Server CPU, ms/s | 51.4 (47.6-80.0) | 53.3 (51.4-55.2) | +4% |
+| Interval standard deviation, ms | 0.129 | 0.111 | -14% |
+| Software backend: updates per second | 62.7 | 58.3 | |
+| Client CPU, ms/s | 31.9 (30.9-32.7) | 35.5 (33.0-36.9) | +11% |
+| Server CPU, ms/s | 80.0 (77.9-81.9) | 78.1 (73.7-80.0) | -2% |
+| Interval standard deviation, ms | 0.369 | 2.826 | +666% |
+
+| Qt Quick, compositor off | Off | On | Change |
+|---|---:|---:|---:|
+| Default backend: updates per second | 60.0 | 60.0 | |
+| Client CPU, ms/s | 35.9 (35.3-36.7) | 36.4 (20.0-37.5) | +1% |
+| Server CPU, ms/s | 24.8 (23.2-35.8) | 25.2 (24.8-34.4) | +2% |
+| Interval standard deviation, ms | 0.104 | 0.101 | -3% |
+| Software backend: updates per second | 62.7 | 59.6 | |
+| Client CPU, ms/s | 30.7 (29.7-31.8) | 34.9 (31.5-35.2) | +14% |
+| Server CPU, ms/s | 36.2 (35.8-38.1) | 37.9 (36.2-41.9) | +5% |
+| Interval standard deviation, ms | 0.380 | 1.391 | +266% |
+
+- On the default backend neither feature is used, and the small differences are within the ranges.
+- The software backend does use vblank updates, and its result breaks the "regresses none by more than 2%" rule above. It asks
+  for updates from Qt's 16 ms animation timer rather than from its paint, which may be why, but that hasn't been confirmed.
+- On Xvfb a window driven by a 16 ms timer fell to about 43 updates per second with vblank updates, while on this display it
+  reached 56-59, so use a real display for this.
 
 ## Baseline, 2026-11-05
 

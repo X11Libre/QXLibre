@@ -1,6 +1,7 @@
 // Prints one CSV line of timing and X traffic for a software-rendered window scenario.
 // Usage: qxlibre_perf <fullrepaint1080p|fullrepaint4k|scrolltext|scrolllist|partial|resize|update> [frames]
-//        qxlibre_perf rasterwindow [seconds]
+//        qxlibre_perf <rasterwindow|quick> [seconds]
+//        qxlibre_perf has-quick
 
 #include <QtCore/qelapsedtimer.h>
 #include <QtCore/qfile.h>
@@ -16,6 +17,11 @@
 #include <QtWidgets/qscrollbar.h>
 #include <QtWidgets/qtextedit.h>
 #include <qpa/qplatformnativeinterface.h>
+#ifdef QXLIBRE_PERF_HAS_QUICK
+#include <QtCore/qmutex.h>
+#include <QtQml/qqmlapplicationengine.h>
+#include <QtQuick/qquickwindow.h>
+#endif
 
 #include <xcb/xcb.h>
 
@@ -94,9 +100,10 @@ private:
 
 // Prints updates per second, the standard deviation of their interval in ms, client and server CPU
 // in ms per second, and the screen's refresh rate.
-int runRasterWindow(int seconds)
+int measureAnimation(const char *scenario, QWindow &window, int seconds,
+                     const std::function<void()> &clearIntervals,
+                     const std::function<QList<double>()> &takeIntervals)
 {
-    AnimatedWindow window;
     window.setFlag(Qt::WindowDoesNotAcceptFocus);
     window.resize(800, 600);
     window.show();
@@ -108,7 +115,7 @@ int runRasterWindow(int seconds)
     };
     runFor(500);
 
-    window.intervals.clear();
+    clearIntervals();
     const double cpuBefore = cpuMilliseconds();
     const double serverCpuBefore = serverCpuMilliseconds();
     QElapsedTimer timer;
@@ -118,7 +125,7 @@ int runRasterWindow(int seconds)
     const double cpu = (cpuMilliseconds() - cpuBefore) / elapsed;
     const double serverCpu = (serverCpuMilliseconds() - serverCpuBefore) / elapsed;
 
-    const QList<double> intervals = window.intervals;
+    const QList<double> intervals = takeIntervals();
     double mean = 0;
     for (double interval : intervals)
         mean += interval;
@@ -128,12 +135,68 @@ int runRasterWindow(int seconds)
         variance += (interval - mean) * (interval - mean);
     variance /= std::max<qsizetype>(intervals.size(), 1);
 
-    printf("rasterwindow,%s,%d,%.1f,%.3f,%.1f,%.1f,%.1f\n",
+    printf("%s,%s,%d,%.1f,%.3f,%.1f,%.1f,%.1f\n", scenario,
            qEnvironmentVariable("QT_QPA_PLATFORM").toUtf8().constData(), seconds,
            intervals.size() / elapsed, std::sqrt(variance), cpu, serverCpu,
            window.screen()->refreshRate());
     return 0;
 }
+
+int runRasterWindow(int seconds)
+{
+    AnimatedWindow window;
+    return measureAnimation("rasterwindow", window, seconds, [&window] { window.intervals.clear(); },
+                            [&window] { return window.intervals; });
+}
+
+#ifdef QXLIBRE_PERF_HAS_QUICK
+// Timed from the swaps, which can happen on Qt Quick's render thread. QT_QUICK_BACKEND picks how it
+// draws.
+int runQuick(int seconds)
+{
+    // Before the engine, because its render thread can still be swapping while it's destroyed.
+    QMutex mutex;
+    QList<double> intervals;
+    QElapsedTimer swaps;
+
+    QQmlApplicationEngine engine;
+    engine.loadData(R"(
+        import QtQuick
+        Window {
+            color: "black"
+            Rectangle {
+                width: 200; height: 200; y: 200; color: "steelblue"
+                NumberAnimation on x { from: 0; to: 600; duration: 2000; loops: Animation.Infinite }
+                RotationAnimation on rotation { from: 0; to: 360; duration: 2000; loops: Animation.Infinite }
+            }
+        }
+    )");
+    auto *window = engine.rootObjects().isEmpty()
+            ? nullptr
+            : qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst());
+    if (!window) {
+        fprintf(stderr, "qxlibre_perf: the scene didn't load\n");
+        return 3;
+    }
+
+    QObject::connect(window, &QQuickWindow::frameSwapped, window, [&] {
+        const QMutexLocker locker(&mutex);
+        if (swaps.isValid())
+            intervals << swaps.nsecsElapsed() / 1e6;
+        swaps.start();
+    }, Qt::DirectConnection);
+
+    return measureAnimation("quick", *window, seconds,
+                            [&] {
+                                const QMutexLocker locker(&mutex);
+                                intervals.clear();
+                            },
+                            [&] {
+                                const QMutexLocker locker(&mutex);
+                                return intervals;
+                            });
+}
+#endif
 
 } // namespace
 
@@ -155,6 +218,17 @@ int main(int argc, char **argv)
 
     if (scenario == "rasterwindow"_L1)
         return runRasterWindow(frames);
+#ifdef QXLIBRE_PERF_HAS_QUICK
+    if (scenario == "has-quick"_L1)
+        return 0;
+    if (scenario == "quick"_L1)
+        return runQuick(frames);
+#else
+    if (scenario == "has-quick"_L1 || scenario == "quick"_L1) {
+        fprintf(stderr, "qxlibre_perf: built without Qt Quick\n");
+        return 4;
+    }
+#endif
 
     if (scenario == "fullrepaint1080p"_L1 || scenario == "fullrepaint4k"_L1) {
         auto *painted = new PaintedWidget;
