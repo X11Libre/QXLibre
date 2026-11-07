@@ -1,6 +1,6 @@
 // Prints one CSV line of timing and X traffic for a software-rendered window scenario.
 // Usage: qxlibre_perf <fullrepaint1080p|fullrepaint4k|scrolltext|scrolllist|partial|resize|update> [frames]
-//        qxlibre_perf <rasterwindow|quick> [seconds]
+//        qxlibre_perf <rasterwindow|quick> [seconds]    QXLIBRE_PERF_WINDOW_SIZE=WxH, 800x600 by default
 //        qxlibre_perf has-quick
 
 #include <QtCore/qelapsedtimer.h>
@@ -78,6 +78,12 @@ void waitForServer(xcb_connection_t *connection)
     free(xcb_get_input_focus_reply(connection, xcb_get_input_focus(connection), nullptr));
 }
 
+QSize animationWindowSize()
+{
+    const QList<QByteArray> size = qgetenv("QXLIBRE_PERF_WINDOW_SIZE").split('x');
+    return size.size() == 2 ? QSize(size[0].toInt(), size[1].toInt()) : QSize(800, 600);
+}
+
 // A window animating itself with requestUpdate(), as far as the platform lets it.
 class AnimatedWindow : public QRasterWindow
 {
@@ -105,7 +111,7 @@ int measureAnimation(const char *scenario, QWindow &window, int seconds,
                      const std::function<QList<double>()> &takeIntervals)
 {
     window.setFlag(Qt::WindowDoesNotAcceptFocus);
-    window.resize(800, 600);
+    window.resize(animationWindowSize());
     window.show();
     // A real event loop: spinning on processEvents() would measure the spinning.
     QEventLoop loop;
@@ -160,17 +166,19 @@ int runQuick(int seconds)
     QElapsedTimer swaps;
 
     QQmlApplicationEngine engine;
-    engine.loadData(R"(
+    const QSize size = animationWindowSize();
+    const int side = size.height() / 3;
+    engine.loadData(QString::fromLatin1(R"(
         import QtQuick
         Window {
             color: "black"
             Rectangle {
-                width: 200; height: 200; y: 200; color: "steelblue"
-                NumberAnimation on x { from: 0; to: 600; duration: 2000; loops: Animation.Infinite }
+                width: %1; height: %1; y: %1; color: "steelblue"
+                NumberAnimation on x { from: 0; to: %2; duration: 2000; loops: Animation.Infinite }
                 RotationAnimation on rotation { from: 0; to: 360; duration: 2000; loops: Animation.Infinite }
             }
         }
-    )");
+    )").arg(side).arg(size.width() - side).toUtf8());
     auto *window = engine.rootObjects().isEmpty()
             ? nullptr
             : qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst());
