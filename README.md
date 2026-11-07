@@ -57,6 +57,9 @@ sudo cmake --install build
 Add `-DQT_BUILD_TESTS=ON` to build the tests, and run them with `xvfb-run ctest` from the build
 directory.
 
+To measure performance on your own machine, run `tests/manual/perf/measure.py --build build` from your
+X session. See [its instructions and our results](tests/manual/perf/README.md).
+
 Rebuild QXLibre on every Qt update, because it uses private Qt APIs.
 
 These files don't overlap with any file from Qt:
