@@ -19,6 +19,8 @@ support in Qt, and it keeps working if Qt removes that support. These notes list
   behaving like popups.
 - Pasting very large clipboard contents is now safe. Another application can no longer crash yours by announcing a huge
   paste, or by sending more than 2 GiB.
+- Plugging in or removing a mouse, keyboard or tablet no longer deletes input devices that an application set up for
+  itself. Window managers such as SonicDE's crashed on exit or restart because of it.
 - Animations use about half the processor time, because Qt windows that animate themselves now draw in step with your
   display, instead of drawing about two frames in three that it can't show. Windows built with Qt Widgets aren't
   affected, and neither are windows drawn by the graphics card, as Qt Quick windows usually are. If you need to, you can
@@ -68,5 +70,5 @@ support in Qt, and it keeps working if Qt removes that support. These notes list
   Measured on the same machine, over 5 runs each way. A 60 Hz display can't show the updates above 60 per second in the
   software drawing rows.
 - Behind the scenes: new automated tests for containers, popups, animation timing, drawing without waiting for the X
-  server and the reported platform name, new session management tests, and a new tool and script that anyone can use to
+  server, the reported platform name and input devices, new session management tests, and a new tool and script that anyone can use to
   measure drawing performance on their own machine.

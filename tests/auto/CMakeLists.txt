@@ -1,4 +1,5 @@
 add_subdirectory(platformname)
+add_subdirectory(inputdevices)
 
 find_package(Qt6 ${PROJECT_VERSION} QUIET CONFIG OPTIONAL_COMPONENTS Qml Quick QuickControls2 Widgets)
 if(TARGET Qt::Quick AND TARGET Qt::QuickControls2)

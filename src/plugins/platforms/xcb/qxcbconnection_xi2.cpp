@@ -468,6 +468,11 @@ void QXcbConnection::xi2SetupDevices()
     // Start with all known devices; remove the ones that still exist.
     // Afterwards, previousDevices will be the list of those that we should delete.
     QList<const QInputDevice *> previousDevices = QInputDevice::devices();
+    // Only devices this connection created; other code in the process may register its own.
+    previousDevices.removeIf([this](const QInputDevice *dev) {
+        const QObject *owner = dev->parent();
+        return owner != this && (!owner || owner->parent() != this);
+    });
     // Return true if the device with the given systemId is new;
     // otherwise remove it from previousDevices and return false.
     auto newOrKeep = [&previousDevices](qint64 systemId) {
