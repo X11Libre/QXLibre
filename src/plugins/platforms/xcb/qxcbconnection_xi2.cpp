@@ -549,6 +549,11 @@ void QXcbConnection::xi2SetupDevices()
         m_xiSlavePointerIds.removeAll(id);
         m_touchDevices.remove(id);
     }
+    // A removed master takes its slaves, which are its children, with it.
+    const QList<const QInputDevice *> removed = previousDevices;
+    previousDevices.removeIf([&removed](const QInputDevice *dev) {
+        return removed.contains(qobject_cast<const QInputDevice *>(dev->parent()));
+    });
     qDeleteAll(previousDevices);
 
     if (m_xiMasterPointerIds.size() > 1)

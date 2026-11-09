@@ -40,6 +40,34 @@ static void addMasterDevice(xcb_connection_t *connection, const QByteArray &name
     xcb_flush(connection);
 }
 
+// Removes a master pair again, as unplugging does; its slave devices float.
+static void removeMasterDevice(xcb_connection_t *connection, xcb_input_device_id_t masterPointer)
+{
+    xcb_input_remove_master_t remove = {};
+    remove.type = XCB_INPUT_HIERARCHY_CHANGE_TYPE_REMOVE_MASTER;
+    remove.len = sizeof(remove) / 4;
+    remove.deviceid = masterPointer;
+    remove.return_mode = XCB_INPUT_CHANGE_MODE_FLOAT;
+    xcb_input_xi_change_hierarchy(connection, 1, reinterpret_cast<const xcb_input_hierarchy_change_t *>(&remove));
+    xcb_flush(connection);
+}
+
+static QByteArray deviceNames()
+{
+    QStringList names;
+    for (const QInputDevice *dev : QInputDevice::devices())
+        names << dev->name();
+    return names.join(u", "_s).toUtf8();
+}
+
+static const QInputDevice *deviceNamed(const QString &name)
+{
+    const auto devices = QInputDevice::devices();
+    const auto it = std::find_if(devices.cbegin(), devices.cend(),
+                                 [&name](const QInputDevice *dev) { return dev->name().startsWith(name); });
+    return it == devices.cend() ? nullptr : *it;
+}
+
 void tst_InputDevices::hierarchyChangeKeepsForeignDevices()
 {
     auto *connection = static_cast<xcb_connection_t *>(
@@ -53,13 +81,20 @@ void tst_InputDevices::hierarchyChangeKeepsForeignDevices()
     QWindowSystemInterface::registerInputDevice(foreign);
 
     const QByteArray name = "qxlibre test " + QByteArray::number(QCoreApplication::applicationPid());
+    const QString pointerName = QString::fromLatin1(name) + u" pointer"_s;
     addMasterDevice(connection, name);
     // The plugin has handled the hierarchy event once it lists the new master.
-    QTRY_VERIFY(std::any_of(QInputDevice::devices().cbegin(), QInputDevice::devices().cend(),
-                            [&name](const QInputDevice *dev) { return dev->name().startsWith(QString::fromLatin1(name)); }));
+    QTRY_VERIFY2(deviceNamed(pointerName), deviceNames().constData());
 
     QVERIFY2(foreign, "the plugin deleted an input device it didn't create");
     QVERIFY(QInputDevice::devices().contains(foreign.data()));
+
+    // The removed masters and their slaves go together; the slaves are the masters' children.
+    removeMasterDevice(connection, deviceNamed(pointerName)->systemId());
+    QTRY_VERIFY(!deviceNamed(pointerName));
+    QVERIFY(std::none_of(QInputDevice::devices().cbegin(), QInputDevice::devices().cend(),
+                         [&name](const QInputDevice *dev) { return dev->name().startsWith(QString::fromLatin1(name)); }));
+    QVERIFY2(foreign, "the plugin deleted an input device it didn't create");
     delete foreign.data();
 }
 

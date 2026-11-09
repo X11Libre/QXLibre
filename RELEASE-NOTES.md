@@ -21,6 +21,9 @@ support in Qt, and it keeps working if Qt removes that support. These notes list
   paste, or by sending more than 2 GiB.
 - Plugging in or removing a mouse, keyboard or tablet no longer deletes input devices that an application set up for
   itself. Window managers such as SonicDE's crashed on exit or restart because of it.
+- Applications no longer crash when an extra pointer and keyboard pair (an X master device) is removed, for example by a
+  virtual machine or by `xinput remove-master`. Before, every running Qt application crashed at once, which could end
+  the whole desktop session.
 - Animations use about half the processor time, because Qt windows that animate themselves now draw in step with your
   display, instead of drawing about two frames in three that it can't show. Windows built with Qt Widgets aren't
   affected, and neither are windows drawn by the graphics card, as Qt Quick windows usually are. If you need to, you can
